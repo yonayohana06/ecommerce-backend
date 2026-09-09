@@ -28,7 +28,7 @@ export const up = (pgm) => {
         id: { type: 'bigserial', primaryKey: true },
         name: { type: 'varchar(100)', notNull: true },
         email: { type: 'varchar(150)', notNull: true, unique: true },
-        password_hash: { type: 'varchar(255)', notNull: true },
+        password: { type: 'varchar(255)', notNull: true },
         phone_number: { type: 'varchar(20)' },
         created_at: {
             type: 'timestamptz',
