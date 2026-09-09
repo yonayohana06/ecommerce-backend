@@ -61,38 +61,57 @@ ECOMMERCE-BACKEND/
 ### `users`
 | Column | Type | Constraints |
 | :--- | :--- | :--- |
-| `id` | SERIAL | PRIMARY KEY |
+| `id` | BIGSERIAL | PRIMARY KEY |
 | `name` | VARCHAR(100) | NOT NULL |
 | `email` | VARCHAR(150) | UNIQUE, NOT NULL |
 | `password` | VARCHAR(255) | NOT NULL |
+| `phone_number` | VARCHAR(20) | NULL |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
+| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
+
+### `categories`
+| Column | Type | Constraints |
+| :--- | :--- | :--- |
+| `id` | SERIAL | PRIMARY KEY |
+| `name` | VARCHAR(100) | NOT NULL |
+| `slug` | VARCHAR(100) | UNIQUE NOT NULL |
+| `icon_url` | TEXT | NULL |
 | `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
 
 ### `products`
 | Column | Type | Constraints |
 | :--- | :--- | :--- |
-| `id` | SERIAL | PRIMARY KEY |
-| `name` | VARCHAR(150) | NOT NULL |
+| `id` | BIGSERIAL | PRIMARY KEY |
+| `category_id` | INT | FOREIGN KEY (`categories.id`) |
+| `name` | VARCHAR(200) | NOT NULL |
+| `description` | TEXT | NULL |
 | `price` | DECIMAL(12, 2) | NOT NULL |
 | `stock` | INT | NOT NULL, DEFAULT 0 |
+| `image_url` | TEXT | NULL |
+| `is_active` | BOOLEAN | NOT NULL, DEFAULT TRUE |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
+| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
 
 ### `orders`
 | Column | Type | Constraints |
 | :--- | :--- | :--- |
-| `id` | SERIAL | PRIMARY KEY |
+| `id` | BIGSERIAL | PRIMARY KEY |
 | `user_id` | INT | FOREIGN KEY (`users.id`) |
-| `total_amount` | DECIMAL(12, 2) | NOT NULL |
+| `total_amount` | DECIMAL(12, 2) | NOT NULL, DEFAULT 0 |
 | `shipping_address` | TEXT | NOT NULL |
 | `status` | VARCHAR(50) | DEFAULT 'PENDING' |
 | `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
+| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
 
 ### `order_items`
 | Column | Type | Constraints |
 | :--- | :--- | :--- |
-| `id` | SERIAL | PRIMARY KEY |
+| `id` | BIGSERIAL | PRIMARY KEY |
 | `order_id` | INT | FOREIGN KEY (`orders.id`) |
 | `product_id` | INT | FOREIGN KEY (`products.id`) |
 | `quantity` | INT | NOT NULL |
 | `price` | DECIMAL(12, 2) | NOT NULL |
+| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP |
 
 ---
 
