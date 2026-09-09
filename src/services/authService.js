@@ -18,7 +18,7 @@ const registerUser = async ({ name, email, password }) => {
 
     // 3. Simpan ke database
     const insertQuery = `
-    INSERT INTO users (name, email, password_hash)
+    INSERT INTO users (name, email, password)
     VALUES ($1, $2, $3)
     RETURNING id, name, email, created_at;
   `;
@@ -29,7 +29,7 @@ const registerUser = async ({ name, email, password }) => {
 const loginUser = async ({ email, password }) => {
     // 1. Cari user berdasarkan email
     const userResult = await db.query(
-        'SELECT id, name, email, password_hash FROM users WHERE email = $1;',
+        'SELECT id, name, email, password FROM users WHERE email = $1;',
         [email]
     );
 
@@ -40,7 +40,7 @@ const loginUser = async ({ email, password }) => {
     const user = userResult.rows[0];
 
     // 2. Cocokkan raw password dengan hashed password di DB
-    const isPasswordMatch = await bcrypt.compare(password, user.password_hash);
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
     if (!isPasswordMatch) {
         throw new Error('Kredensial tidak valid (Email atau Password salah).');
     }
