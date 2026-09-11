@@ -11,6 +11,8 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+app.get('/test', (req, res) => res.status(200).send('OK'));
+
 app.use('/api/auth', authRoutes);
 
 // Orders
