@@ -1,4 +1,4 @@
-name: Production CI/CD Pipeline
+name: Production Migration Pipeline
 
 on:
   push:
@@ -6,31 +6,24 @@ on:
       - main
 
 jobs:
-  migrate-and-deploy:
+  migrate:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout kode dari repo
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Setup environment Node.js
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      # 3. Install dependencies
       - name: Install Dependencies
         run: npm ci
 
-      # 4. Jalankan migrasi database ke Supabase
+      # Jalankan Migrasi Database ke Supabase
       - name: Run Database Migration
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npm run migrate:up
-
-      # 5. Trigger deployment ke Render jika migrasi sukses
-      - name: Trigger Render Deploy
-        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
