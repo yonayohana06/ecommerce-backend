@@ -68,7 +68,83 @@ const getProductById = async (id) => {
   return result.rows[0] || null;
 };
 
+const createProduct = async (data) => {
+  const { category_id, name, description, price, stock, image_url, is_active } = data;
+  const query = `
+    INSERT INTO products (category_id, name, description, price, stock, image_url, is_active)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    RETURNING *;
+  `;
+  const values = [
+    category_id || null,
+    name,
+    description || null,
+    price,
+    stock,
+    image_url || null,
+    is_active !== undefined ? is_active : true
+  ];
+  const result = await db.query(query, values);
+  return result.rows[0];
+};
+
+const updateProduct = async (id, data) => {
+  const { category_id, name, description, price, stock, image_url, is_active } = data;
+  const query = `
+    UPDATE products 
+    SET 
+      category_id = COALESCE($1, category_id),
+      name = COALESCE($2, name),
+      description = COALESCE($3, description),
+      price = COALESCE($4, price),
+      stock = COALESCE($5, stock),
+      image_url = COALESCE($6, image_url),
+      is_active = COALESCE($7, is_active),
+      updated_at = NOW()
+    WHERE id = $8
+    RETURNING *;
+  `;
+  const values = [category_id, name, description, price, stock, image_url, is_active, id];
+  const result = await db.query(query, values);
+  return result.rows[0];
+};
+
+const deleteProduct = async (id) => {
+  // 1. Cek apakah produk pernah ada di tabel order_items
+  const checkOrderQuery = `
+    SELECT COUNT(*) 
+    FROM order_items 
+    WHERE product_id = $1;
+  `;
+  const orderCheckResult = await db.query(checkOrderQuery, [id]);
+  const hasBeenPurchased = parseInt(orderCheckResult.rows[0].count, 10) > 0;
+
+  // 2. Jika SUDAH PERNAH DIBELI -> Soft Delete (Ubah is_active = false)
+  if (hasBeenPurchased) {
+    const softDeleteQuery = `
+      UPDATE products 
+      SET is_active = false, updated_at = NOW() 
+      WHERE id = $1 
+      RETURNING *, 'soft_deleted' AS delete_type;
+    `;
+    const result = await db.query(softDeleteQuery, [id]);
+    return result.rows[0];
+  }
+
+  // 3. Jika BELUM PERNAH DIBELI -> Hard Delete (Hapus permanen dari DB)
+  const hardDeleteQuery = `
+    DELETE FROM products 
+    WHERE id = $1 
+    RETURNING *, 'hard_deleted' AS delete_type;
+  `;
+  const result = await db.query(hardDeleteQuery, [id]);
+  return result.rows[0];
+};
+
 module.exports = {
   getProducts,
-  getProductById
+  getProductById,
+  createProduct,
+  updateProduct,
+  deleteProduct
 };
