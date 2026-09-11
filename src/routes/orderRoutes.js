@@ -3,7 +3,7 @@ const router = express.Router();
 const db = require('../config/db');
 const orderController = require('../controllers/orderController');
 const verifyPaymentSignature = require('../middlewares/verifySignature');
-const verifyAuthToken = require('../middlewares/authMiddleware');
+const { verifyAuthToken } = require('../middlewares/authMiddleware');
 
 // GET /api/orders/:id (Ambil detail order format JSON bersarang)
 router.get('/:id', async (req, res) => {
