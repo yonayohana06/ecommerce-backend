@@ -1,16 +1,16 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const db = require('../config/db');
-const orderController = require('../controllers/orderController');
-const verifyPaymentSignature = require('../middlewares/verifySignature');
-const { verifyAuthToken } = require('../middlewares/authMiddleware');
+const db = require("../config/db");
+const orderController = require("../controllers/orderController");
+const verifyPaymentSignature = require("../middlewares/verifySignature");
+const { verifyAuthToken } = require("../middlewares/authMiddleware");
 
 // GET /api/orders/:id (Ambil detail order format JSON bersarang)
-router.get('/:id', async (req, res) => {
-    const { id } = req.params;
-    const userId = 101; // Simulasi ID user yang sedang login
+router.get("/:id", async (req, res) => {
+  const { id } = req.params;
+  const userId = 101; // Simulasi ID user yang sedang login
 
-    const queryText = `
+  const queryText = `
     SELECT 
         o.id AS order_id,
         o.status,
@@ -42,36 +42,40 @@ router.get('/:id', async (req, res) => {
     GROUP BY o.id, u.id;
   `;
 
-    try {
-        const result = await db.query(queryText, [id, userId]);
+  try {
+    const result = await db.query(queryText, [id, userId]);
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({
-                code: 404,
-                message: 'Order tidak ditemukan',
-                data: null,
-            });
-        }
-
-        return res.status(200).json({
-            code: 200,
-            message: 'Berhasil mengambil detail order',
-            data: result.rows[0],
-        });
-    } catch (error) {
-        console.error('Database Error:', error);
-        return res.status(500).json({
-            code: 500,
-            message: 'Internal Server Error',
-            error: error.message,
-        });
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        code: 404,
+        message: "Order tidak ditemukan",
+        data: null,
+      });
     }
+
+    return res.status(200).json({
+      code: 200,
+      message: "Berhasil mengambil detail order",
+      data: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Database Error:", error);
+    return res.status(500).json({
+      code: 500,
+      message: "Internal Server Error",
+      error: error.message,
+    });
+  }
 });
 
 // Route POST checkout
-router.post('/checkout', verifyAuthToken, orderController.handleCheckout);
+router.post("/checkout", verifyAuthToken, orderController.handleCheckout);
 
 // Route POST webhook payment
-router.post('/webhook/payment', verifyPaymentSignature, orderController.handlePaymentWebhook);
+router.post(
+  "/webhook/payment",
+  verifyPaymentSignature,
+  orderController.handlePaymentWebhook,
+);
 
 module.exports = router;

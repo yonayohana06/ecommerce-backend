@@ -24,7 +24,7 @@ const verifyAuthToken = (req, res, next) => {
   }
 };
 
-// 2. Middleware Otorisasi Role (RBAC)
+// Middleware Otorisasi Role (RBAC) - bisa banyak role
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user || !allowedRoles.includes(req.user.role)) {
@@ -33,7 +33,7 @@ const authorize = (...allowedRoles) => {
           "Akses dilarang. Anda tidak memiliki izin untuk mengakses resource ini.",
       });
     }
-    next();
+    return next();
   };
 };
 

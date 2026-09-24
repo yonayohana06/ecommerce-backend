@@ -6,13 +6,14 @@ const authRoutes = require("./routes/authRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const productRoutes = require("./routes/productRoutes");
 const cartRoutes = require("./routes/cartRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-app.get("/test", (req, res) => res.status(200).send("OK"));
+// app.get("/test", (req, res) => res.status(200).send("OK"));
 
 app.use("/api/auth", authRoutes);
 
@@ -24,6 +25,8 @@ app.use("/api/products", productRoutes);
 
 // Product
 app.use("/api/cart", cartRoutes);
+
+app.use("/api", paymentRoutes);
 
 // Fungsi untuk cek database sebelum server menerima traffic
 const startServer = async () => {
