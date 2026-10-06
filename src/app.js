@@ -1,4 +1,5 @@
 const express = require("express");
+const cors = require("cors");
 require("dotenv").config();
 
 const db = require("./config/db");
@@ -12,6 +13,20 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// Konfigurasi CORS
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "https://frontend-kamu.vercel.app",
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  }),
+);
 
 // app.get("/test", (req, res) => res.status(200).send("OK"));
 
