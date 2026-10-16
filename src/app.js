@@ -5,9 +5,9 @@ require("dotenv").config();
 const db = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const orderRoutes = require("./routes/orderRoutes");
-const productRoutes = require("./routes/productRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const mainRoutes = require("./routes/index");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,13 +35,11 @@ app.use("/api/auth", authRoutes);
 // Orders
 app.use("/api/orders", orderRoutes);
 
-// Product
-app.use("/api/products", productRoutes);
-
-// Product
+// Cart
 app.use("/api/cart", cartRoutes);
 
 app.use("/api", paymentRoutes);
+app.use("/api", mainRoutes);
 
 // Fungsi untuk cek database sebelum server menerima traffic
 const startServer = async () => {
