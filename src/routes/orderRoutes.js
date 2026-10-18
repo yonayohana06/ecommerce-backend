@@ -3,12 +3,12 @@ const router = express.Router();
 const db = require("../config/db");
 const orderController = require("../controllers/orderController");
 const verifyPaymentSignature = require("../middlewares/verifySignature");
-const { verifyAuthToken } = require("../middlewares/authMiddleware");
+const { verifyUserToken } = require("../middlewares/authMiddleware");
 
 // GET /api/orders/:id (Ambil detail order format JSON bersarang)
-router.get("/:id", async (req, res) => {
+router.get("/:id", verifyUserToken, async (req, res) => {
   const { id } = req.params;
-  const userId = 101; // Simulasi ID user yang sedang login
+  const userId = req.user.userId;
 
   const queryText = `
     SELECT 
@@ -69,7 +69,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // Route POST checkout
-router.post("/checkout", verifyAuthToken, orderController.handleCheckout);
+router.post("/checkout", verifyUserToken, orderController.handleCheckout);
 
 // Route POST webhook payment
 router.post(

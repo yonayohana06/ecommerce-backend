@@ -25,22 +25,24 @@ ECOMMERCE-BACKEND/
 │   ├── constants/
 │   │   └── orderStatus.js            # Enum status pesanan (PENDING, PAID, PROCESSING, dll)
 │   ├── controllers/
+│   │   ├── adminAuthController.js    # Autentikasi dan login khusus administrator
 │   │   ├── adminCategoryController.js # Manajemen kategori oleh admin (CRUD)
 │   │   ├── adminProductController.js  # Manajemen produk oleh admin (CRUD + Smart Delete)
-│   │   ├── authController.js         # Registrasi dan login user
+│   │   ├── authController.js         # Registrasi dan login user biasa
 │   │   ├── cartController.js         # Manajemen keranjang belanja pengguna
 │   │   ├── categoryController.js     # Katalog kategori publik
 │   │   ├── orderController.js        # Checkout pesanan & webhook pembayaran
 │   │   ├── paymentController.js      # Upload bukti bayar & manajemen order admin
 │   │   └── productController.js      # Katalog & detail produk publik
 │   ├── middlewares/
-│   │   ├── authMiddleware.js         # Verifikasi token JWT & RBAC (Role-Based Access Control)
+│   │   ├── authMiddleware.js         # Token verification (verifyUserToken, verifyAdminToken, verifyAuthToken, RBAC)
 │   │   ├── uploadMiddleware.js       # Konfigurasi Multer memory storage (gambar, maks 2MB)
 │   │   └── verifySignature.js        # Verifikasi HMAC SHA-512 signature payment gateway
 │   ├── routes/
+│   │   ├── adminAuthRoutes.js        # Endpoint auth admin (/api/admin/auth)
 │   │   ├── adminCategoryRoutes.js    # Endpoint admin kategori (/api/admin/categories)
 │   │   ├── adminProductRoutes.js     # Endpoint admin produk (/api/admin/products)
-│   │   ├── authRoutes.js             # Endpoint autentikasi (/api/auth)
+│   │   ├── authRoutes.js             # Endpoint autentikasi user (/api/auth)
 │   │   ├── cartRoutes.js             # Endpoint keranjang belanja (/api/cart)
 │   │   ├── categoryRoutes.js         # Endpoint kategori publik (/api/categories)
 │   │   ├── index.js                  # Agregator router utama
@@ -48,7 +50,8 @@ ECOMMERCE-BACKEND/
 │   │   ├── paymentRoutes.js          # Endpoint bukti bayar & pesanan admin (/api)
 │   │   └── productRoutes.js          # Endpoint produk publik (/api/products)
 │   ├── services/
-│   │   ├── authService.js            # Hashing Bcrypt, otentikasi, pembuatan JWT
+│   │   ├── adminAuthService.js       # Logika auth admin, token khusus admin
+│   │   ├── authService.js            # Hashing Bcrypt, otentikasi user, pembuatan JWT
 │   │   ├── cartService.js            # Logika keranjang belanja (Upsert & validasi stok)
 │   │   ├── categoryService.js        # Logika kategori, auto-slugify, pencegahan duplikasi
 │   │   ├── orderService.js           # Transaksi checkout ACID & FOR UPDATE row locking
@@ -66,12 +69,19 @@ ECOMMERCE-BACKEND/
 
 ## 🛡️ Aturan Keamanan & Otentikasi
 
-### 1. User Authentication & RBAC (Role-Based Access Control)
-* Otentikasi menggunakan **JSON Web Token (JWT)** secara stateless.
-* Masa berlaku token diset selama **7 hari** secara default melalui `JWT_EXPIRES_IN`.
-* Password pengguna dienkripsi dengan algoritma **Bcrypt** (salt rounds = 10).
-* Endpoint terlindungi menggunakan middleware `verifyAuthToken`.
-* Otorisasi role menggunakan middleware `authorize('admin')` untuk membatasi endpoint khusus administrator.
+### 1. Pemisahan Autentikasi Pengguna & Administrator
+Sistem memisahkan secara ketat alur autentikasi dan otorisasi antara **Pelanggan Biasa** dan **Administrator**:
+* **Portal Pelanggan (`/api/auth`)**:
+  * Pendaftaran publik (`/register`) otomatis menetapkan `role: 'user'`.
+  * Login pelanggan (`/login`) menolak akun dengan `role: 'admin'` (`403 Forbidden`) agar admin tidak dapat login di portal belanja pelanggan.
+  * Token ditandatangani dengan `JWT_SECRET` (default durasi: **7 hari**).
+  * Proteksi endpoint pelanggan menggunakan middleware `verifyUserToken`.
+* **Portal Administrator (`/api/admin/auth`)**:
+  * **Tidak memiliki endpoint registrasi publik**. Akun admin dibuat secara internal (seeder/CLI/database).
+  * Login admin (`/login`) **wajib memiliki `role: 'admin'`**; user biasa yang mencoba login akan langsung ditolak (`403 Forbidden`).
+  * Token ditandatangani dengan `ADMIN_JWT_SECRET` (default durasi lebih singkat: **8 jam** demi keamanan).
+  * Proteksi endpoint admin menggunakan middleware `verifyAdminToken`.
+* Password dienkripsi dengan algoritma **Bcrypt** (salt rounds = 10).
 * Token dikirim melalui HTTP Header:
   ```http
   Authorization: Bearer <your_jwt_token>
@@ -170,19 +180,26 @@ ECOMMERCE-BACKEND/
 
 Base URL: `http://localhost:3000/api`
 
-### 🔐 1. Autentikasi — `/api/auth`
+### 🔐 1. Autentikasi Pengguna — `/api/auth`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
-| `POST` | `/api/auth/register` | Publik | Mendaftarkan akun baru (nama, email unik, password min. 6 karakter). |
-| `POST` | `/api/auth/login` | Publik | Autentikasi email & password, mengembalikan token JWT dan profil user. |
+| `POST` | `/api/auth/register` | Publik | Mendaftarkan akun pelanggan baru (nama, email unik, password min. 6 karakter). |
+| `POST` | `/api/auth/login` | Publik | Login pelanggan (menolak akun admin), mengembalikan JWT User token (7 hari) dan profil. |
+| `GET` | `/api/auth/me` | User | Mengambil data profil pelanggan yang sedang login. |
 
-### 📦 2. Katalog Produk (Publik) — `/api/products`
+### 🛠️ 2. Autentikasi Administrator — `/api/admin/auth`
+| Method | Endpoint | Akses | Deskripsi |
+| :---: | :--- | :---: | :--- |
+| `POST` | `/api/admin/auth/login` | Publik (Admin) | Login administrator (wajib role `admin`), mengembalikan JWT Admin token (8 jam) dan profil. |
+| `GET` | `/api/admin/auth/me` | Admin | Mengambil data profil administrator yang sedang login. |
+
+### 📦 3. Katalog Produk (Publik) — `/api/products`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `GET` | `/api/products` | Publik | Mengambil daftar produk aktif dengan filter `category_id`, `search` (ILIKE), dan pagination (`page`, `limit`). |
 | `GET` | `/api/products/:id` | Publik | Mengambil detail spesifik produk aktif beserta nama kategori. |
 
-### 🛠️ 3. Manajemen Produk (Admin) — `/api/admin/products`
+### 🛠️ 4. Manajemen Produk (Admin) — `/api/admin/products`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `GET` | `/api/admin/products` | Admin | Mengambil semua produk (aktif maupun non-aktif) dengan filter dan pagination. |
@@ -191,14 +208,14 @@ Base URL: `http://localhost:3000/api`
 | `PUT` | `/api/admin/products/:id` | Admin | Memperbarui data/stok produk secara dinamis. |
 | `DELETE` | `/api/admin/products/:id` | Admin | Menghapus produk. Menggunakan **Soft Delete** jika produk sudah pernah dibeli, atau **Hard Delete** jika belum pernah dibeli. |
 
-### 🏷️ 4. Katalog Kategori (Publik) — `/api/categories`
+### 🏷️ 5. Katalog Kategori (Publik) — `/api/categories`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `GET` | `/api/categories` | Publik | Mengambil semua kategori beserta kalkulasi jumlah produk aktif terkait (`product_count`). Mendukung pencarian `?search=...`. |
 | `GET` | `/api/categories/slug/:slug` | Publik | Mengambil detail kategori berdasarkan slug URL-friendly. |
 | `GET` | `/api/categories/:id` | Publik | Mengambil detail kategori berdasarkan ID numerik. |
 
-### 🛠️ 5. Manajemen Kategori (Admin) — `/api/admin/categories`
+### 🛠️ 6. Manajemen Kategori (Admin) — `/api/admin/categories`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `GET` | `/api/admin/categories` | Admin | Mengambil daftar seluruh kategori untuk admin. |
@@ -207,7 +224,7 @@ Base URL: `http://localhost:3000/api`
 | `PUT` | `/api/admin/categories/:id` | Admin | Memperbarui nama, slug, atau icon kategori. |
 | `DELETE` | `/api/admin/categories/:id` | Admin | Menghapus kategori. Menghitung dan mengabari jumlah produk terkait yang diset ke tanpa kategori. |
 
-### 🛒 6. Keranjang Belanja — `/api/cart`
+### 🛒 7. Keranjang Belanja — `/api/cart`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `GET` | `/api/cart` | User | Mengambil isi keranjang belanja user, detail produk aktif, subtotal, dan `grand_total`. |
@@ -216,14 +233,14 @@ Base URL: `http://localhost:3000/api`
 | `DELETE` | `/api/cart/:id` | User | Menghapus satu item dari keranjang belanja. |
 | `DELETE` | `/api/cart` | User | Mengosongkan seluruh keranjang belanja user. |
 
-### 📋 7. Pesanan Pengguna — `/api/orders`
+### 📋 8. Pesanan Pengguna — `/api/orders`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `POST` | `/api/orders/checkout` | User | Melakukan checkout pesanan dari keranjang belanja (transaksi database ACID, *row locking*, potong stok produk, dan kosongkan keranjang). |
 | `GET` | `/api/orders/:id` | User | Mengambil detail pesanan dalam format JSON terstruktur lengkap beserta daftar item dan informasi pembeli. |
 | `POST` | `/api/orders/:orderId/pay` | User | Mengunggah file bukti transfer (`multipart/form-data`, field: `proof_image`). File disimpan ke Supabase Storage dan status diubah ke `PROCESSING`. |
 
-### 📊 8. Manajemen Pesanan & Dashboard (Admin) — `/api/admin/orders`
+### 📊 9. Manajemen Pesanan & Dashboard (Admin) — `/api/admin/orders`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `GET` | `/api/admin/orders/summary` | Admin | Mengambil ringkasan statistik pesanan (total pesanan, total omset dari status valid, dan perincian order per status). |
@@ -231,7 +248,7 @@ Base URL: `http://localhost:3000/api`
 | `GET` | `/api/admin/orders/:orderId` | Admin | Mengambil detail lengkap pesanan spesifik, data customer, item produk, dan signed URL bukti transfer. |
 | `PATCH` | `/api/admin/orders/:orderId/status` | Admin | Mengubah status pesanan (misal: `PAID`, `CANCELLED`). Mengembalikan stok produk otomatis jika dibatalkan, atau memotong stok kembali jika pesanan batal diaktifkan kembali. |
 
-### 💳 9. Webhook Payment Gateway — `/api/orders/webhook/payment`
+### 💳 10. Webhook Payment Gateway — `/api/orders/webhook/payment`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `POST` | `/api/orders/webhook/payment` | Webhook | Menerima callback notifikasi status pembayaran dari Payment Gateway. Request divalidasi dengan signature HMAC SHA-512. |
@@ -262,9 +279,13 @@ DB_NAME=ecommerce_db
 # Atau gunakan Database URL (opsional, jika menggunakan Supabase / Cloud Database)
 # DATABASE_URL=postgres://postgres:password@db.xxxx.supabase.co:5432/postgres
 
-# JWT & Security
+# JWT & Security (Customer Portal)
 JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRES_IN=7d
+
+# JWT & Security (Admin Portal)
+ADMIN_JWT_SECRET=your_admin_jwt_secret_key
+ADMIN_JWT_EXPIRES_IN=8h
 
 # Payment Gateway
 PAYMENT_SERVER_KEY=your_payment_server_key

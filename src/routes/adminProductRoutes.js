@@ -1,40 +1,27 @@
 const express = require("express");
 const router = express.Router();
 const productController = require("../controllers/adminProductController");
-const { verifyAuthToken, authorize } = require("../middlewares/authMiddleware");
+const { verifyAdminToken } = require("../middlewares/authMiddleware");
 
-router.get(
-  "/products",
-  verifyAuthToken,
-  authorize("admin"),
-  productController.getProductList,
-);
+router.get("/products", verifyAdminToken, productController.getProductList);
 
 router.get(
   "/products/:id",
-  verifyAuthToken,
-  authorize("admin"),
+  verifyAdminToken,
   productController.getProductDetail,
 );
 
-router.post(
-  "/products",
-  verifyAuthToken,
-  authorize("admin"),
-  productController.createProduct,
-);
+router.post("/products", verifyAdminToken, productController.createProduct);
 
 router.put(
   "/products/:id",
-  verifyAuthToken,
-  authorize("admin"),
+  verifyAdminToken,
   productController.updateProduct,
 );
 
 router.delete(
   "/products/:id",
-  verifyAuthToken,
-  authorize("admin"),
+  verifyAdminToken,
   productController.deleteProduct,
 );
 
