@@ -1,40 +1,31 @@
 const express = require("express");
 const router = express.Router();
 const adminCategoryController = require("../controllers/adminCategoryController");
-const { verifyAuthToken, authorize } = require("../middlewares/authMiddleware");
+const { verifyAdminToken } = require("../middlewares/authMiddleware");
 
-router.get(
-  "/categories",
-  verifyAuthToken,
-  authorize("admin"),
-  adminCategoryController.getCategoryList,
-);
+router.get("/categories", verifyAdminToken, adminCategoryController.getCategoryList);
 
 router.get(
   "/categories/:id",
-  verifyAuthToken,
-  authorize("admin"),
+  verifyAdminToken,
   adminCategoryController.getCategoryDetail,
 );
 
 router.post(
   "/categories",
-  verifyAuthToken,
-  authorize("admin"),
+  verifyAdminToken,
   adminCategoryController.createCategory,
 );
 
 router.put(
   "/categories/:id",
-  verifyAuthToken,
-  authorize("admin"),
+  verifyAdminToken,
   adminCategoryController.updateCategory,
 );
 
 router.delete(
   "/categories/:id",
-  verifyAuthToken,
-  authorize("admin"),
+  verifyAdminToken,
   adminCategoryController.deleteCategory,
 );
 
