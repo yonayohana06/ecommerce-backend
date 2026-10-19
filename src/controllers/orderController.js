@@ -32,6 +32,66 @@ const handleCheckout = async (req, res) => {
   }
 };
 
+const getUserOrders = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { status, page, limit } = req.query;
+
+    const result = await orderService.getUserOrders({
+      userId,
+      status,
+      page,
+      limit,
+    });
+
+    return res.status(200).json({
+      code: 200,
+      message: "Berhasil mengambil daftar pesanan",
+      data: result.orders,
+      pagination: result.pagination,
+    });
+  } catch (error) {
+    console.error("Error fetching user orders:", error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      code: statusCode,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
+const getUserOrderDetail = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { id } = req.params;
+
+    if (isNaN(id)) {
+      return res.status(400).json({
+        code: 400,
+        message: "ID pesanan tidak valid",
+      });
+    }
+
+    const order = await orderService.getUserOrderDetail({
+      userId,
+      orderId: id,
+    });
+
+    return res.status(200).json({
+      code: 200,
+      message: "Berhasil mengambil detail pesanan",
+      data: order,
+    });
+  } catch (error) {
+    console.error("Error fetching user order detail:", error);
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({
+      code: statusCode,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+
 const handlePaymentWebhook = async (req, res) => {
   try {
     const { order_id, transaction_status } = req.body;
@@ -69,8 +129,9 @@ const handlePaymentWebhook = async (req, res) => {
     });
   } catch (error) {
     console.error("Webhook error:", error.message);
-    return res.status(400).json({
-      code: 400,
+    const statusCode = error.statusCode || 400;
+    return res.status(statusCode).json({
+      code: statusCode,
       message: error.message,
     });
   }
@@ -78,5 +139,7 @@ const handlePaymentWebhook = async (req, res) => {
 
 module.exports = {
   handleCheckout,
+  getUserOrders,
+  getUserOrderDetail,
   handlePaymentWebhook,
 };

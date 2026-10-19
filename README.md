@@ -237,7 +237,8 @@ Base URL: `http://localhost:3000/api`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `POST` | `/api/orders/checkout` | User | Melakukan checkout pesanan dari keranjang belanja (transaksi database ACID, *row locking*, potong stok produk, dan kosongkan keranjang). |
-| `GET` | `/api/orders/:id` | User | Mengambil detail pesanan dalam format JSON terstruktur lengkap beserta daftar item dan informasi pembeli. |
+| `GET` | `/api/orders` | User | Mengambil daftar riwayat pesanan milik user yang sedang login dengan filter `status` dan pagination (`page`, `limit`). |
+| `GET` | `/api/orders/:id` | User | Mengambil detail lengkap spesifik pesanan milik user (hanya pesanan milik user sendiri) beserta rincian item produk yang dibeli. |
 | `POST` | `/api/orders/:orderId/pay` | User | Mengunggah file bukti transfer (`multipart/form-data`, field: `proof_image`). File disimpan ke Supabase Storage dan status diubah ke `PROCESSING`. |
 
 ### 📊 9. Manajemen Pesanan & Dashboard (Admin) — `/api/admin/orders`
