@@ -1,127 +1,6 @@
 const { pool } = require("../config/db");
-
-const checkoutOrder = async ({ userId, items, shippingAddress }) => {
-  const client = await pool.connect(); // Dedicated client untuk transaksi
-
-  try {
-    await client.query("BEGIN");
-
-    let totalAmount = 0;
-    const itemsToInsert = [];
-
-    for (const item of items) {
-      // 1. Lock baris produk untuk mencegah race condition (FOR UPDATE)
-      const productQuery = `
-        SELECT id, name, price, stock, is_active 
-        FROM products 
-        WHERE id = $1 FOR UPDATE;
-      `;
-      const productRes = await client.query(productQuery, [item.product_id]);
-
-      if (productRes.rows.length === 0) {
-        throw new Error(`Produk dengan ID ${item.product_id} tidak ditemukan.`);
-      }
-
-      const product = productRes.rows[0];
-
-      if (!product.is_active) {
-        throw new Error(`Produk "${product.name}" sedang tidak aktif.`);
-      }
-
-      if (product.stock < item.quantity) {
-        throw new Error(
-          `Stok "${product.name}" tidak mencukupi (Sisa: ${product.stock}).`,
-        );
-      }
-
-      const price = parseFloat(product.price);
-      const subtotal = price * item.quantity;
-      totalAmount += subtotal;
-
-      itemsToInsert.push({
-        product_id: product.id,
-        quantity: item.quantity,
-        price_at_purchase: price,
-      });
-
-      // 2. Kurangi stok produk secara langsung
-      await client.query(
-        "UPDATE products SET stock = stock - $1 WHERE id = $2;",
-        [item.quantity, product.id],
-      );
-    }
-
-    // 3. Simpan header order
-    const orderInsertQuery = `
-      INSERT INTO orders (user_id, total_amount, status, shipping_address)
-      VALUES ($1, $2, 'PENDING', $3)
-      RETURNING id, created_at, status;
-    `;
-    const orderRes = await client.query(orderInsertQuery, [
-      userId,
-      totalAmount,
-      shippingAddress,
-    ]);
-    const createdOrder = orderRes.rows[0];
-
-    // 4. Simpan seluruh item ke order_items
-    for (const orderItem of itemsToInsert) {
-      await client.query(
-        `INSERT INTO order_items (order_id, product_id, quantity, price_at_purchase)
-         VALUES ($1, $2, $3, $4);`,
-        [
-          createdOrder.id,
-          orderItem.product_id,
-          orderItem.quantity,
-          orderItem.price_at_purchase,
-        ],
-      );
-    }
-
-    // 5. Eksekusi commit semua query jika tidak ada kendala
-    await client.query("COMMIT");
-
-    return {
-      order_id: createdOrder.id,
-      user_id: userId,
-      status: createdOrder.status,
-      total_amount: totalAmount,
-      shipping_address: shippingAddress,
-      created_at: createdOrder.created_at,
-    };
-  } catch (error) {
-    await client.query("ROLLBACK"); // Batalkan seluruh query jika ada error
-    throw error;
-  } finally {
-    client.release(); // Kembalikan koneksi ke pool
-  }
-};
-
-const updateOrderStatus = async ({ orderId, targetStatus }) => {
-  const query = `
-    UPDATE orders 
-    SET status = $1, updated_at = NOW() 
-    WHERE id = $2 AND status != $1
-    RETURNING id, user_id, status, total_amount;
-  `;
-
-  const result = await pool.query(query, [targetStatus, orderId]);
-
-  // Jika baris yang ter-update 0, berarti order ID tidak ada atau statusnya memang sudah PAID
-  if (result.rows.length === 0) {
-    const checkOrder = await pool.query(
-      "SELECT id, status FROM orders WHERE id = $1",
-      [orderId],
-    );
-    if (checkOrder.rows.length === 0) {
-      throw new Error(`Order ID ${orderId} tidak ditemukan.`);
-    }
-    // Jika order sudah PAID sebelumnya, kembalikan statusnya tanpa melempar error (idempotent)
-    return { ...checkOrder.rows[0], already_processed: true };
-  }
-
-  return { ...result.rows[0], already_processed: false };
-};
+const ORDER_STATUS = require("../constants/orderStatus");
+const { generateSignedUrl } = require("./paymentService");
 
 const checkout = async (userId, shippingAddress) => {
   const client = await pool.connect();
@@ -231,8 +110,214 @@ const checkout = async (userId, shippingAddress) => {
   }
 };
 
+// Ambil daftar pesanan milik user yang sedang login (dengan filter status & pagination)
+const getUserOrders = async ({ userId, status, page = 1, limit = 10 }) => {
+  // Sanitasi input pagination
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const rawLimit = parseInt(limit, 10) || 10;
+  const limitNum = Math.min(100, Math.max(1, rawLimit));
+  const offset = (pageNum - 1) * limitNum;
+
+  const queryValues = [userId];
+  const whereClauses = ["o.user_id = $1"];
+
+  // Filter status jika disediakan
+  if (status) {
+    const validStatuses = Object.values(ORDER_STATUS);
+    if (!validStatuses.includes(status)) {
+      const error = new Error(
+        `Filter status tidak valid. Pilihan status yang tersedia: ${validStatuses.join(", ")}`,
+      );
+      error.statusCode = 400;
+      throw error;
+    }
+    queryValues.push(status);
+    whereClauses.push(`o.status = $${queryValues.length}::order_status`);
+  }
+
+  const whereString = `WHERE ${whereClauses.join(" AND ")}`;
+
+  // Query order header beserta preview items dan jumlah total item
+  const ordersQuery = `
+    SELECT 
+      o.id AS order_id,
+      o.user_id,
+      o.total_amount,
+      o.status,
+      o.shipping_address,
+      o.payment_proof_url,
+      o.payment_submitted_at,
+      o.created_at,
+      o.updated_at,
+      COUNT(oi.id)::int AS total_items,
+      COALESCE(SUM(oi.quantity), 0)::int AS total_quantity,
+      COALESCE(
+        json_agg(
+          json_build_object(
+            'order_item_id', oi.id,
+            'product_id', p.id,
+            'product_name', p.name,
+            'product_image', p.image_url,
+            'quantity', oi.quantity,
+            'price_at_purchase', oi.price_at_purchase,
+            'subtotal', (oi.quantity * oi.price_at_purchase)
+          )
+        ) FILTER (WHERE oi.id IS NOT NULL),
+        '[]'
+      ) AS items
+    FROM orders o
+    LEFT JOIN order_items oi ON o.id = oi.order_id
+    LEFT JOIN products p ON oi.product_id = p.id
+    ${whereString}
+    GROUP BY o.id
+    ORDER BY o.created_at DESC
+    LIMIT $${queryValues.length + 1} OFFSET $${queryValues.length + 2};
+  `;
+
+  const countQuery = `
+    SELECT COUNT(*) 
+    FROM orders o 
+    ${whereString};
+  `;
+
+  const [ordersResult, countResult] = await Promise.all([
+    pool.query(ordersQuery, [...queryValues, limitNum, offset]),
+    pool.query(countQuery, queryValues),
+  ]);
+
+  // Generate Signed URL untuk payment_proof_url dan format angka
+  const orders = await Promise.all(
+    ordersResult.rows.map(async (order) => {
+      let signedProofUrl = order.payment_proof_url;
+      if (order.payment_proof_url) {
+        signedProofUrl = await generateSignedUrl(order.payment_proof_url);
+      }
+      return {
+        ...order,
+        payment_proof_url: signedProofUrl,
+        total_amount: parseFloat(order.total_amount),
+        items: (order.items || []).map((item) => ({
+          ...item,
+          price_at_purchase: parseFloat(item.price_at_purchase),
+          subtotal: parseFloat(item.subtotal),
+        })),
+      };
+    }),
+  );
+
+  const totalItems = countResult.rows[0]?.count
+    ? parseInt(countResult.rows[0].count, 10)
+    : 0;
+  const totalPages = Math.ceil(totalItems / limitNum) || 1;
+  const hasPreviousPage = pageNum > 1;
+  const hasNextPage = pageNum < totalPages;
+
+  return {
+    orders,
+    pagination: {
+      currentPage: pageNum,
+      limit: limitNum,
+      totalItems,
+      totalPages,
+      hasPreviousPage,
+      hasNextPage,
+    },
+  };
+};
+
+// Ambil detail spesifik pesanan milik user
+const getUserOrderDetail = async ({ userId, orderId }) => {
+  const orderQuery = `
+    SELECT 
+      o.id,
+      o.user_id,
+      o.total_amount,
+      o.status,
+      o.shipping_address,
+      o.payment_proof_url,
+      o.payment_submitted_at,
+      o.created_at,
+      o.updated_at
+    FROM orders o
+    WHERE o.id = $1 AND o.user_id = $2;
+  `;
+
+  const itemsQuery = `
+    SELECT 
+      oi.id AS order_item_id,
+      oi.product_id,
+      p.name AS product_name,
+      p.image_url AS product_image,
+      oi.quantity,
+      oi.price_at_purchase,
+      (oi.quantity * oi.price_at_purchase) AS subtotal
+    FROM order_items oi
+    JOIN products p ON oi.product_id = p.id
+    WHERE oi.order_id = $1;
+  `;
+
+  const [orderResult, itemsResult] = await Promise.all([
+    pool.query(orderQuery, [orderId, userId]),
+    pool.query(itemsQuery, [orderId]),
+  ]);
+
+  if (orderResult.rows.length === 0) {
+    const error = new Error("Pesanan tidak ditemukan");
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const order = orderResult.rows[0];
+
+  let signedProofUrl = order.payment_proof_url;
+  if (order.payment_proof_url) {
+    signedProofUrl = await generateSignedUrl(order.payment_proof_url);
+  }
+
+  const items = itemsResult.rows.map((item) => ({
+    ...item,
+    price_at_purchase: parseFloat(item.price_at_purchase),
+    subtotal: parseFloat(item.subtotal),
+  }));
+
+  return {
+    ...order,
+    payment_proof_url: signedProofUrl,
+    total_amount: parseFloat(order.total_amount),
+    items,
+  };
+};
+
+// Update status pesanan (digunakan untuk webhook payment gateway)
+const updateOrderStatus = async ({ orderId, targetStatus }) => {
+  const query = `
+    UPDATE orders 
+    SET status = $1::order_status, updated_at = NOW() 
+    WHERE id = $2 AND status != $1::order_status
+    RETURNING id, user_id, status, total_amount;
+  `;
+
+  const result = await pool.query(query, [targetStatus, orderId]);
+
+  if (result.rows.length === 0) {
+    const checkOrder = await pool.query(
+      "SELECT id, status FROM orders WHERE id = $1",
+      [orderId],
+    );
+    if (checkOrder.rows.length === 0) {
+      const error = new Error(`Order ID ${orderId} tidak ditemukan.`);
+      error.statusCode = 404;
+      throw error;
+    }
+    return { ...checkOrder.rows[0], already_processed: true };
+  }
+
+  return { ...result.rows[0], already_processed: false };
+};
+
 module.exports = {
   checkout,
-  checkoutOrder,
+  getUserOrders,
+  getUserOrderDetail,
   updateOrderStatus,
 };

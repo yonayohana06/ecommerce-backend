@@ -384,6 +384,7 @@ const getOrderSummaryForAdmin = async () => {
 };
 
 module.exports = {
+  generateSignedUrl,
   submitPaymentProof,
   updateOrderStatus,
   getAllOrdersForAdmin,
