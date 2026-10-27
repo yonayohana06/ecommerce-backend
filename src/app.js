@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const supabase = require("./config/supabase");
 require("dotenv").config();
 
 const db = require("./config/db");
@@ -28,7 +29,15 @@ app.use(
   }),
 );
 
-// app.get("/test", (req, res) => res.status(200).send("OK"));
+app.get("/200", async (req, res) => {
+  try {
+    const { data, error } = await supabase.rpc("version");
+    if (error) throw error;
+    res.status(200).send("OK");
+  } catch (err) {
+    res.status(500).send("Database Error");
+  }
+});
 
 app.use("/api/auth", authRoutes);
 
