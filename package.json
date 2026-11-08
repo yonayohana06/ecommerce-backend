@@ -4,7 +4,12 @@
   "description": "",
   "main": "src/app.js",
   "scripts": {
-    "test": "node --test",
+    "test": "node --require ./tests/setup.js --test",
+    "test:watch": "node --watch --require ./tests/setup.js --test",
+    "test:db:prepare": "node scripts/prepare-test-db.js",
+    "test:db": "npm run test:db:prepare && RUN_DB_TESTS=1 node --require ./tests/setup.js --test --test-concurrency=1",
+    "test:coverage": "npm run test:db:prepare && RUN_DB_TESTS=1 node --require ./tests/setup.js --test --test-concurrency=1 --experimental-test-coverage --test-coverage-lines=60 --test-coverage-branches=60 --test-coverage-functions=60",
+    "lint": "node scripts/lint.js",
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "migrate:create": "node-pg-migrate create",

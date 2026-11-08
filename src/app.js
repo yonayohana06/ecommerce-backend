@@ -70,6 +70,10 @@ const startServer = async () => {
   }
 };
 
-startServer();
+// startServer hanya dijalankan jika file ini dieksekusi langsung (`node src/app.js`).
+// Saat diimpor oleh test atau serverless, app cukup diekspor tanpa membuka listener.
+if (require.main === module) {
+  startServer();
+}
 
 module.exports = app;

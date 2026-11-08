@@ -100,7 +100,7 @@ Update tersedia: Express `5.3.0`, Multer `2.5.0`, `pg` `8.23.1`, `@supabase/supa
 
 **Rekomendasi:** jalankan `npm update`/`npm audit fix`, lalu audit ulang. Pindahkan `node-pg-migrate` ke `devDependencies` karena hanya dipakai untuk migrasi/CI.
 
-**Update 8 November 2026:** selesai. Versi terpasang: Express `5.3.0`, Multer `2.5.0`, pg `8.23.1`, `@supabase/supabase-js` `2.119.0`. `node-pg-migrate@9.0.0` dipindah ke `devDependencies`, sehingga `npm audit --omit=dev` melaporkan **0 vulnerabilities**. Sisa 4 moderate ada di devDependencies (`glob`/`minimatch` via `node-pg-migrate` dan `nodemon`); belum ada perbaikan tanpa downgrade, diterima karena hanya tooling lokal/CI. `npm ci` dan seluruh 39 test lulus.
+**Update 8 November 2026:** selesai. Versi terpasang: Express `5.3.0`, Multer `2.5.0`, pg `8.23.1`, `@supabase/supabase-js` `2.119.0`. `node-pg-migrate@9.0.0` dipindah ke `devDependencies`, sehingga `npm audit --omit=dev` melaporkan **0 vulnerabilities**. Sisa 4 moderate ada di devDependencies (`glob`/`minimatch` via `node-pg-migrate` dan `nodemon`); belum ada perbaikan tanpa downgrade, diterima karena hanya tooling lokal/CI. `npm ci` dan seluruh 90 test lulus.
 
 ### 4.2 Tinggi
 
@@ -113,6 +113,8 @@ Update tersedia: Express `5.3.0`, Multer `2.5.0`, `pg` `8.23.1`, `@supabase/supa
 **Dampak:** perubahan pada checkout, stok, auth, atau webhook sangat rawan regresi.
 
 **Rekomendasi:** tambahkan integration test dengan `supertest` + database test terpisah, unit test untuk slugify/status mapping, test migrasi dari DB kosong, dan jalankan di CI pada setiap PR.
+
+**Update 8 November 2026:** selesai. Test runner memakai `node:test` + `fetch` (tanpa dependency baru). Tersedia 90 test untuk auth/RBAC, CRUD katalog, cart/checkout, upload bukti bayar, webhook, skema, dan migrasi dari database kosong. `app.js` tidak lagi membuka listener saat diimpor. Database test terpisah dibuat dan dimigrasikan otomatis melalui `scripts/prepare-test-db.js`; test menolak berjalan jika `TEST_DATABASE_URL` sama dengan `DATABASE_URL`. CI baru (`.github/workflows/test.yml`) menjalankan lint, test non-DB, dan test DB dengan coverage pada PR serta push ke `main`/`develop`. Coverage saat ini 76,04% lines, 70,39% branches, 84,17% functions (ambang 60%).
 
 #### 5. Validasi input dan error handling belum konsisten
 
@@ -271,6 +273,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sedang dikerjakan; sudah ada test admin, skema database, dan order status.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 90 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.

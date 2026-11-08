@@ -92,7 +92,7 @@
 - [x] Fresh install dari migration menghasilkan skema yang sama dengan DB aktual.
 - [x] `npm run migrate:up` berhasil di DB kosong dan DB existing.
 - [x] Tidak ada index duplikat.
-- [ ] CI migration berhasil menggunakan database test (dikerjakan bersama P0-04).
+- [x] CI migration berhasil menggunakan database test (test `tests/db/migration.test.js` membuat DB kosong, menjalankan seluruh migration, lalu menghapusnya).
 
 **Verifikasi:**
 ```bash
@@ -181,6 +181,8 @@ Hasil: `npm audit --omit=dev` → `found 0 vulnerabilities`; `npm ci` berhasil; 
 
 **Temuan:** 4.2.4 (tidak ada test, `npm test` selalu gagal, CI hanya migration).
 
+**Progres 8 November 2026:** selesai. Test runner memakai `node:test` bawaan (tanpa dependency baru). `app.js` hanya membuka listener saat dijalankan langsung, sehingga aman diimpor test. Database test terpisah (`TEST_DATABASE_URL`) dibuat dan dimigrasikan otomatis; test menolak berjalan jika URL test sama dengan `DATABASE_URL`. Total **90 test**, coverage **76,04% lines / 70,39% branches / 84,17% functions** (ambang 60%). CI baru `.github/workflows/test.yml` menjalankan lint, test non-DB, dan seluruh test DB + coverage dengan service PostgreSQL 18.
+
 **Estimasi:** L (2–3 hari)
 
 **Files:**
@@ -191,35 +193,39 @@ Hasil: `npm audit --omit=dev` → `found 0 vulnerabilities`; `npm ci` berhasil; 
 - `jest.config.js` atau konfigurasi test runner yang dipilih
 
 **Langkah:**
-- [ ] Pilih test runner: Jest + Supertest (direkomendasikan) atau `node:test`.
-- [ ] Siapkan database test terpisah dan jalankan migration sebelum test.
-- [ ] Ubah `app.js` agar dapat di-import tanpa menjalankan listener.
-- [ ] Tambahkan test minimal:
-  - [ ] Register/login user dan admin.
-  - [ ] RBAC: user tidak bisa akses endpoint admin dan sebaliknya.
-  - [ ] CRUD produk dan kategori.
-  - [ ] Add/update/delete cart dan validasi stok.
-  - [ ] Checkout sukses, stok berkurang, cart kosong.
-  - [ ] Checkout gagal karena stok habis dan rollback.
-  - [ ] Upload bukti bayar valid/tidak valid.
-  - [ ] Webhook signature valid/tidak valid dan sinkronisasi stok.
-  - [ ] Migration dari database kosong.
-  - [ ] Invalid input dan error response JSON.
-- [ ] Tambahkan script `test`, `test:watch`, dan `test:coverage`.
-- [ ] Tambahkan job CI untuk lint + test + migration test pada PR.
-- [ ] Tambahkan coverage threshold yang realistis (misalnya 60% untuk memulai).
+- [x] Pilih test runner: `node:test` bawaan + `fetch` (tanpa Jest/Supertest).
+- [x] Siapkan database test terpisah dan jalankan migration sebelum test (`scripts/prepare-test-db.js`).
+- [x] Ubah `app.js` agar dapat di-import tanpa menjalankan listener.
+- [x] Tambahkan test minimal:
+  - [x] Register/login user dan admin.
+  - [x] RBAC: user tidak bisa akses endpoint admin dan sebaliknya.
+  - [x] CRUD produk dan kategori.
+  - [x] Add/update/delete cart dan validasi stok.
+  - [x] Checkout sukses, stok berkurang, cart kosong.
+  - [x] Checkout gagal karena stok habis dan rollback.
+  - [x] Upload bukti bayar valid/tidak valid.
+  - [x] Webhook signature valid/tidak valid dan sinkronisasi stok.
+  - [x] Migration dari database kosong.
+  - [x] Invalid input dan error response JSON.
+- [x] Tambahkan script `test`, `test:watch`, `test:db`, dan `test:coverage`.
+- [x] Tambahkan job CI untuk lint + test + migration test pada PR dan push.
+- [x] Tambahkan coverage threshold yang realistis (60% lines/branches/functions).
 
 **Definition of Done:**
-- [ ] `npm test` berhasil, bukan placeholder.
-- [ ] CI berjalan pada PR dan push.
-- [ ] Test migration dari DB kosong berhasil.
-- [ ] Tidak ada test yang bergantung pada database production.
+- [x] `npm test` berhasil, bukan placeholder.
+- [x] CI berjalan pada PR dan push.
+- [x] Test migration dari DB kosong berhasil.
+- [x] Tidak ada test yang bergantung pada database production.
 
 **Verifikasi:**
 ```bash
 npm test
+npm run test:db
 npm run test:coverage
+npm run lint
 ```
+
+Hasil: `npm test` 11 pass + 79 skip (DB test), `npm run test:db` 90/90 lulus, `npm run test:coverage` 90/90 lulus dengan coverage di atas ambang, `npm run lint` OK untuk 50 file.
 
 ### P0-05: Validasi input dan global error handling
 

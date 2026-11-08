@@ -283,6 +283,9 @@ DB_NAME=ecommerce_db
 # Gunakan ?sslmode=disable untuk PostgreSQL lokal tanpa SSL.
 DATABASE_URL=postgresql://postgres:password@localhost:5432/ecommerce_db?sslmode=disable
 
+# Database test terpisah (wajib berbeda dari DATABASE_URL)
+TEST_DATABASE_URL=postgresql://postgres:password@localhost:5432/fastshop_test?sslmode=disable
+
 # JWT & Security (Customer Portal)
 JWT_SECRET=your_jwt_secret_key
 JWT_EXPIRES_IN=1d
@@ -322,9 +325,9 @@ npm run migrate:down
 > docker exec pg-local pg_dump -U postgres -d fastshop-be > backup.sql
 > ```
 >
-> `npm run migrate:down` hanya membatalkan satu migration terakhir. Setelah itu jalankan `npm run migrate:up` untuk menerapkannya kembali. Uji skema database dengan:
+> `npm run migrate:down` hanya membatalkan satu migration terakhir. Setelah itu jalankan `npm run migrate:up` untuk menerapkannya kembali. Uji seluruh suite (termasuk skema dan migrasi dari database kosong) dengan:
 > ```bash
-> RUN_DB_TESTS=1 node --test tests/db/schema.test.js
+> npm run test:db
 > ```
 
 ### 3.1 Membuat Admin Pertama
@@ -378,6 +381,28 @@ Perilaku:
   ```bash
   npm start
   ```
+
+### 5. Menjalankan Test
+```bash
+# Test unit/non-DB. Test yang butuh database otomatis di-skip.
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Siapkan database test (dibuat otomatis jika belum ada) + jalankan migration + semua test
+npm run test:db
+
+# Semua test DB + laporan coverage (ambang 60% lines/branches/functions)
+npm run test:coverage
+
+# Pemeriksaan sintaks seluruh file JavaScript di src/, scripts/, dan tests/
+npm run lint
+```
+
+`test:db` dan `test:coverage` memakai `TEST_DATABASE_URL`, **bukan** `DATABASE_URL`. Script akan menolak berjalan jika keduanya sama, sehingga database utama tidak tersentuh. Database test dimigrasikan otomatis sebelum test dijalankan.
+
+CI di `.github/workflows/test.yml` menjalankan lint, test non-DB, dan seluruh test DB dengan coverage pada setiap pull request serta push ke `main`/`develop`, menggunakan service PostgreSQL 18.
 
 ---
 
