@@ -329,6 +329,8 @@ Hasil: `npm test` 44 pass + 104 skip (148 total), `npm run test:db` 148/148 lulu
 
 **Temuan:** 4.2.7.
 
+**Progres 8 November 2026:** selesai. `addToCart` sekarang memvalidasi produk ada, aktif, dan total quantity (termasuk akumulasi item yang sudah ada) tidak melebihi stok di dalam transaksi dengan `FOR UPDATE` pada baris produk. `GET /api/cart` menampilkan semua item, termasuk produk nonaktif atau stok kurang, dengan field `is_available`, `stock`, dan `is_active`; `grand_total` hanya menjumlahkan item yang `is_available`. Checkout tetap menolak item nonaktif/tidak tersedia dengan pesan yang menyebut produk dan meminta user menghapus item tersebut dari keranjang, sehingga item tidak lagi "tersembunyi". Keputusan bisnis: tampilkan item nonaktif dengan flag, bukan hapus otomatis, agar user tetap bisa menghapusnya.
+
 **Estimasi:** S–M
 
 **Files:**
@@ -338,17 +340,24 @@ Hasil: `npm test` 44 pass + 104 skip (148 total), `npm run test:db` 148/148 lulu
 - `tests/cart/*`
 
 **Langkah:**
-- [ ] Validasi produk aktif dan stok saat `addToCart`.
-- [ ] Validasi quantity sebagai integer positif.
-- [ ] Tampilkan item nonaktif di GET cart dengan flag `is_available`, atau hapus otomatis dari cart.
-- [ ] Pastikan checkout tidak gagal karena item tersembunyi.
-- [ ] Tambahkan test: produk dinonaktifkan setelah masuk cart, lalu GET/checkout.
-- [ ] Tambahkan test quantity melebihi stok dan quantity bukan integer.
+- [x] Validasi produk aktif dan stok saat `addToCart`.
+- [x] Validasi quantity sebagai integer positif.
+- [x] Tampilkan item nonaktif di GET cart dengan flag `is_available`, atau hapus otomatis dari cart.
+- [x] Pastikan checkout tidak gagal karena item tersembunyi.
+- [x] Tambahkan test: produk dinonaktifkan setelah masuk cart, lalu GET/checkout.
+- [x] Tambahkan test quantity melebihi stok dan quantity bukan integer.
 
 **Definition of Done:**
-- [ ] User dapat melihat dan menghapus item yang sudah nonaktif.
-- [ ] Checkout memberi error yang jelas atau mengabaikan item nonaktif sesuai keputusan bisnis.
-- [ ] Test cart lulus.
+- [x] User dapat melihat dan menghapus item yang sudah nonaktif.
+- [x] Checkout memberi error yang jelas atau mengabaikan item nonaktif sesuai keputusan bisnis.
+- [x] Test cart lulus.
+
+**Verifikasi:**
+```bash
+npm run test:db -- tests/api/cart-checkout.test.js
+```
+
+Hasil: `npm test` 44 pass + 108 skip (152 total), `npm run test:db` 152/152 lulus, coverage 81,77% lines / 76,88% branches / 87,71% functions, `npm run lint` OK untuk 74 file, `npm audit --omit=dev` 0 vulnerabilities.
 
 ### P1-02: Hardening upload bukti pembayaran
 

@@ -29,9 +29,10 @@ const getMyCart = async (req, res, next) => {
     const userId = req.user.userId;
     const cart = await cartService.getCartByUser(userId);
 
-    // Hitung total belanjaan keseluruhan
+    // Hitung total belanjaan hanya dari item yang masih tersedia.
+    // Item nonaktif tetap tampil agar user bisa menghapusnya, tetapi tidak dihitung.
     const grandTotal = cart.reduce(
-      (acc, item) => acc + Number(item.subtotal),
+      (acc, item) => (item.is_available ? acc + Number(item.subtotal) : acc),
       0,
     );
 

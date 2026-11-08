@@ -52,6 +52,20 @@ async function countUserOrders() {
   return result.rows[0].count;
 }
 
+async function setProductActive(productId, isActive) {
+  await db.query("UPDATE products SET is_active = $1 WHERE id = $2", [
+    isActive,
+    productId,
+  ]);
+}
+
+async function setProductStock(productId, stock) {
+  await db.query("UPDATE products SET stock = $1 WHERE id = $2", [
+    stock,
+    productId,
+  ]);
+}
+
 before(async () => {
   if (!runDbTests) return;
 
@@ -132,6 +146,53 @@ dbTest("menambah produk yang sama mengakumulasi quantity", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(response.body.data.quantity, 3);
+});
+
+dbTest("add to cart menolak produk nonaktif", async () => {
+  const response = await addToCart(inactiveProduct.id, 1);
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.message, /tidak aktif/i);
+
+  const cart = await getCart();
+  assert.equal(cart.body.data.items.length, 0);
+});
+
+dbTest("add to cart menolak quantity melebihi stok", async () => {
+  const response = await addToCart(stockProduct.id, 6);
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.message, /stok.*tidak mencukupi/i);
+  assert.match(response.body.message, /tersisa 5/i);
+
+  const cart = await getCart();
+  assert.equal(cart.body.data.items.length, 0);
+});
+
+dbTest("add to cart menolak akumulasi quantity melebihi stok", async () => {
+  const first = await addToCart(stockProduct.id, 3);
+  assert.equal(first.status, 200);
+
+  const second = await addToCart(stockProduct.id, 3);
+
+  assert.equal(second.status, 400);
+  assert.match(second.body.message, /stok.*tidak mencukupi/i);
+
+  const cart = await getCart();
+  assert.equal(cart.body.data.items.length, 1);
+  assert.equal(cart.body.data.items[0].quantity, 3);
+});
+
+dbTest("add to cart menolak quantity bukan integer positif", async () => {
+  for (const quantity of [1.5, "2.5", 0, -1]) {
+    const response = await addToCart(stockProduct.id, quantity);
+
+    assert.equal(response.status, 400, `quantity ${quantity} seharusnya ditolak`);
+    assert.match(response.body.message, /product id dan quantity/i);
+  }
+
+  const cart = await getCart();
+  assert.equal(cart.body.data.items.length, 0);
 });
 
 dbTest("update quantity melebihi stok ditolak 400", async () => {
@@ -256,7 +317,11 @@ dbTest("checkout sukses mengurangi stok dan mengosongkan keranjang", async () =>
 });
 
 dbTest("checkout stok tidak cukup ditolak dan rollback", async () => {
-  await addToCart(lowStockProduct.id, 2);
+  await addToCart(lowStockProduct.id, 1);
+
+  // Stok berkurang setelah item masuk keranjang (mis. dibeli user lain).
+  await setProductStock(lowStockProduct.id, 0);
+
   const ordersBefore = await countUserOrders();
 
   const response = await request(baseUrl, "/api/orders/checkout", {
@@ -267,26 +332,60 @@ dbTest("checkout stok tidak cukup ditolak dan rollback", async () => {
 
   assert.equal(response.status, 400);
   assert.match(response.body.message, /stok produk.*tidak mencukupi/i);
-  assert.equal(await getProductStock(lowStockProduct.id), 1);
+  assert.equal(await getProductStock(lowStockProduct.id), 0);
   assert.equal(await countUserOrders(), ordersBefore);
 
   const cart = await getCart();
   assert.equal(cart.body.data.items.length, 1);
-  assert.equal(cart.body.data.items[0].quantity, 2);
+  assert.equal(cart.body.data.items[0].quantity, 1);
+  assert.equal(cart.body.data.items[0].is_available, false);
+  assert.equal(cart.body.data.grand_total, 0);
+
+  await setProductStock(lowStockProduct.id, 1);
 });
 
-dbTest("checkout produk nonaktif ditolak 400", async () => {
-  await addToCart(inactiveProduct.id, 1);
+dbTest("produk nonaktif tetap terlihat, bisa dihapus, dan checkout memberi error jelas", async () => {
+  const toggled = await createProduct({
+    name: `Produk Toggle ${uniqueSuffix()}`,
+    price: 10000,
+    stock: 5,
+  });
+  productIds.push(toggled.id);
 
-  const response = await request(baseUrl, "/api/orders/checkout", {
+  const added = await addToCart(toggled.id, 2);
+  assert.equal(added.status, 200);
+
+  await setProductActive(toggled.id, false);
+
+  const cart = await getCart();
+  assert.equal(cart.status, 200);
+  assert.equal(cart.body.data.items.length, 1);
+
+  const item = cart.body.data.items[0];
+  assert.equal(Number(item.product_id), Number(toggled.id));
+  assert.equal(item.quantity, 2);
+  assert.equal(item.is_available, false);
+  assert.equal(Number(item.subtotal), 20000);
+  assert.equal(cart.body.data.grand_total, 0);
+
+  const checkout = await request(baseUrl, "/api/orders/checkout", {
     method: "POST",
     token: userToken,
     body: { shipping_address: "Jl. Produk Nonaktif" },
   });
 
-  assert.equal(response.status, 400);
-  assert.match(response.body.message, /tidak aktif/i);
-  assert.equal(await getProductStock(inactiveProduct.id), 5);
+  assert.equal(checkout.status, 400);
+  assert.match(checkout.body.message, /tidak aktif/i);
+  assert.equal(await getProductStock(toggled.id), 5);
+
+  const deleted = await request(baseUrl, `/api/cart/${item.cart_item_id}`, {
+    method: "DELETE",
+    token: userToken,
+  });
+  assert.equal(deleted.status, 200);
+
+  const emptyCart = await getCart();
+  assert.equal(emptyCart.body.data.items.length, 0);
 });
 
 dbTest("user lain tidak dapat melihat detail pesanan", async () => {

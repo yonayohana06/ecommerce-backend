@@ -227,8 +227,8 @@ Base URL: `http://localhost:3000/api`
 ### 🛒 7. Keranjang Belanja — `/api/cart`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
-| `GET` | `/api/cart` | User | Mengambil isi keranjang belanja user, detail produk aktif, subtotal, dan `grand_total`. |
-| `POST` | `/api/cart` | User | Menambahkan produk ke keranjang (otomatis *upsert* kuantitas jika produk sudah ada). |
+| `GET` | `/api/cart` | User | Mengambil isi keranjang belanja user, detail produk, `is_available`, subtotal, dan `grand_total` (hanya item tersedia). Item nonaktif tetap tampil agar bisa dihapus. |
+| `POST` | `/api/cart` | User | Menambahkan produk ke keranjang (otomatis *upsert* kuantitas jika produk sudah ada; menolak produk nonaktif atau quantity melebihi stok). |
 | `PUT` | `/api/cart/:id` | User | Memperbarui kuantitas produk dalam keranjang (validasi status aktif dan sisa stok). |
 | `DELETE` | `/api/cart/:id` | User | Menghapus satu item dari keranjang belanja. |
 | `DELETE` | `/api/cart` | User | Mengosongkan seluruh keranjang belanja user. |

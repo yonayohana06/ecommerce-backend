@@ -172,6 +172,8 @@ Selain itu:
 
 **Rekomendasi:** validasi saat add-to-cart, tampilkan item nonaktif dengan flag, atau hapus otomatis item nonaktif saat GET/checkout.
 
+**Update 8 November 2026:** selesai. `addToCart` memvalidasi produk ada, aktif, dan total quantity (termasuk akumulasi) tidak melebihi stok dalam transaksi dengan `FOR UPDATE`. `GET /api/cart` menampilkan semua item, termasuk yang nonaktif atau stoknya kurang, dengan field `is_available`, `stock`, dan `is_active`; `grand_total` hanya menjumlahkan item yang tersedia. Checkout menolak item tidak tersedia dengan pesan yang menyebut produk dan meminta user menghapusnya dari keranjang. Keputusan bisnis: item nonaktif ditampilkan agar bisa dihapus, bukan dihapus otomatis. Test cart bertambah menjadi 16 kasus dan seluruh suite 152/152 lulus; coverage 81,77% lines / 76,88% branches / 87,71% functions.
+
 #### 8. Upload bukti pembayaran belum cukup aman
 
 - Filter hanya berdasarkan `file.mimetype` dari client, sehingga bisa dipalsukan.
@@ -255,7 +257,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 ### P1 — Minggu Ini
 
-- Perbaiki cart untuk produk nonaktif dan validasi add-to-cart.
+- ~~Perbaiki cart untuk produk nonaktif dan validasi add-to-cart.~~ (sudah dikerjakan)
 - Hardening upload (allowlist, magic bytes, cleanup).
 - Pisahkan `app.js` dan `server.js` untuk serverless.
 - ~~Tambahkan constraint skema dan index yang hilang.~~ (sudah dikerjakan; sisa `bigint` dan unique `LOWER(email)`).
@@ -277,6 +279,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 148 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 152 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.

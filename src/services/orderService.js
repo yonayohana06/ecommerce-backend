@@ -40,7 +40,7 @@ const checkout = async (userId, shippingAddress) => {
     for (const item of cartItems) {
       if (!item.is_active) {
         const error = new Error(
-          `Produk '${item.product_name}' sudah tidak aktif/dihapus`,
+          `Produk '${item.product_name}' sudah tidak aktif/dihapus. Hapus item tersebut dari keranjang sebelum checkout.`,
         );
         error.statusCode = 400;
         throw error;
