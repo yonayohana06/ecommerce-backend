@@ -20,7 +20,7 @@ ECOMMERCE-BACKEND/
 │   └── ..._add-payment-proof-to-orders.js
 ├── src/
 │   ├── config/
-│   │   ├── db.js                     # Pool koneksi database PostgreSQL (pg)
+│   │   ├── db.js                     # Pool PostgreSQL (max via DB_POOL_MAX, pool.on error)
 │   │   └── supabase.js               # Client Supabase Storage untuk upload file bukti transfer
 │   ├── constants/
 │   │   └── orderStatus.js            # Enum status pesanan (PENDING, PAID, PROCESSING, dll)
@@ -57,7 +57,8 @@ ECOMMERCE-BACKEND/
 │   │   ├── orderService.js           # Transaksi checkout ACID & FOR UPDATE row locking
 │   │   ├── paymentService.js         # Upload ke Supabase Storage, Signed URL, sinkronisasi stok
 │   │   └── productService.js         # Filter produk, ILIKE search, pagination, soft/hard delete
-│   └── app.js                        # Entry point server Express & inisialisasi koneksi DB
+│   ├── app.js                        # Express app murni (tanpa listener)
+│   └── server.js                     # Entry point lokal: listener, cek DB, graceful shutdown
 ├── .env                              # Variabel lingkungan/environment (tidak di-commit)
 ├── .gitignore
 ├── package-lock.json
@@ -233,6 +234,13 @@ Base URL: `http://localhost:3000/api`
 | `DELETE` | `/api/cart/:id` | User | Menghapus satu item dari keranjang belanja. |
 | `DELETE` | `/api/cart` | User | Mengosongkan seluruh keranjang belanja user. |
 
+### 🩺 8. Health Check — `/health`, `/ready`
+| Method | Endpoint | Akses | Deskripsi |
+| :---: | :--- | :---: | :--- |
+| `GET` | `/health` | Publik | Liveness check; mengembalikan `200 {"status":"ok"}` tanpa menyentuh database. |
+| `GET` | `/ready` | Publik | Readiness check; menjalankan `SELECT 1` dan mengembalikan `503` jika database belum siap. |
+| `GET` | `/200` | Publik | Alias lama `/health` untuk kompatibilitas monitoring. |
+
 ### 📋 8. Pesanan Pengguna — `/api/orders`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
@@ -285,6 +293,9 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/ecommerce_db?sslmode=
 
 # Database test terpisah (wajib berbeda dari DATABASE_URL)
 TEST_DATABASE_URL=postgresql://postgres:password@localhost:5432/fastshop_test?sslmode=disable
+
+# Batas koneksi pool per proses (default 5, maksimal 20)
+DB_POOL_MAX=5
 
 # JWT & Security (Customer Portal)
 JWT_SECRET=your_jwt_secret_key
@@ -383,6 +394,15 @@ Perilaku:
   ```bash
   npm start
   ```
+  `npm start` menjalankan `src/server.js`: memvalidasi env, mengecek koneksi database, membuka listener, dan menangani `SIGTERM`/`SIGINT` dengan graceful shutdown. `src/app.js` tetap Express app murni agar aman diimpor oleh test dan Vercel.
+
+* **Health check:**
+  ```bash
+  GET /health   # proses hidup
+  GET /ready    # SELECT 1 ke PostgreSQL, 503 jika belum siap
+  ```
+
+> **Production database:** gunakan Supabase connection pooler (host pooler, umumnya port `6543` untuk transaction mode atau `5432` untuk session mode) pada `DATABASE_URL`, bukan koneksi langsung. Batasi `DB_POOL_MAX` (default 5, maksimal 20) agar jumlah koneksi per instance serverless tidak menghabiskan kuota database.
 
 ### 5. Menjalankan Test
 ```bash

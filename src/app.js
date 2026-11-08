@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 
 const express = require("express");
 const cors = require("cors");
@@ -7,7 +7,6 @@ const { validateEnv } = require("./config/env");
 
 validateEnv(process.env, { requireDatabase: false });
 
-const supabase = require("./config/supabase");
 const db = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const orderRoutes = require("./routes/orderRoutes");
@@ -18,7 +17,6 @@ const notFound = require("./middlewares/notFound");
 const errorHandler = require("./middlewares/errorHandler");
 
 const app = express();
-const PORT = process.env.PORT || 3001;
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
@@ -41,13 +39,26 @@ app.use(
   }),
 );
 
-app.get("/200", async (req, res) => {
+const healthCheck = (req, res) => {
+  res.status(200).json({ status: "ok" });
+};
+
+// Liveness: proses hidup, tidak menyentuh database.
+app.get("/health", healthCheck);
+// Alias lama agar client/monitoring yang sudah memakai /200 tetap bekerja.
+app.get("/200", healthCheck);
+
+// Readiness: pastikan database utama bisa diakses sebelum menerima traffic.
+app.get("/ready", async (req, res) => {
   try {
-    const { data, error } = await supabase.rpc("version");
-    if (error) throw error;
-    res.status(200).send("OK");
-  } catch (err) {
-    res.status(500).send("Database Error");
+    await db.query("SELECT 1");
+    return res.status(200).json({ status: "ready" });
+  } catch (error) {
+    console.error("Readiness check gagal:", error.message);
+    return res.status(503).json({
+      code: 503,
+      message: "Database belum siap.",
+    });
   }
 });
 
@@ -66,30 +77,5 @@ app.use("/api", mainRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
-// Fungsi untuk cek database sebelum server menerima traffic
-const startServer = async () => {
-  try {
-    validateEnv();
-
-    // Eksekusi query ringan untuk tes koneksi
-    const res = await db.query("SELECT NOW()");
-    console.log("✅ PostgreSQL Connected successfully at:", res.rows[0].now);
-
-    // Nyalakan HTTP server setelah database siap
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-    });
-  } catch (err) {
-    console.error("❌ Database connection failed!");
-    console.error("Error detail:", err.message);
-    process.exit(1);
-  }
-};
-
-// startServer hanya dijalankan jika file ini dieksekusi langsung (`node src/app.js`).
-// Saat diimpor oleh test atau serverless, app cukup diekspor tanpa membuka listener.
-if (require.main === module) {
-  startServer();
-}
-
+// Aplikasi Express murni: listener dan koneksi awal dijalankan oleh src/server.js.
 module.exports = app;

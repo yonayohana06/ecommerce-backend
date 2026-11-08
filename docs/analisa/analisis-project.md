@@ -212,6 +212,8 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 **Rekomendasi:** pisahkan `app.js` (pure Express app) dan `server.js` (listener lokal), gunakan Supabase connection pooler untuk production, batasi `pool.max`, dan tambahkan error handler pool.
 
+**Update 8 November 2026:** selesai. `src/app.js` kini Express app murni tanpa listener; `src/server.js` menangani listen, pengecekan database awal, `SIGTERM`/`SIGINT`, dan penutupan pool. `src/config/db.js` memakai `DB_POOL_MAX` (default 5, maksimal 20), `pool.on("error")`, serta timeout idle/connection. `/health` dan `/ready` tersedia (`/ready` mengembalikan 503 bila database gagal), dan `/200` menjadi alias `/health`. `vercel.json` menetapkan `maxDuration: 30`. README mencantumkan penggunaan Supabase connection pooler untuk production. Test bertambah menjadi 168 dan semuanya lulus.
+
 ### 4.3 Sedang
 
 - **Format angka tidak konsisten:** endpoint produk/cart mengembalikan numeric sebagai string (`"1950000.00"`), sedangkan order list/detail mengubahnya menjadi number. Frontend bisa bingung.
@@ -263,7 +265,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 - ~~Perbaiki cart untuk produk nonaktif dan validasi add-to-cart.~~ (sudah dikerjakan)
 - ~~Hardening upload (allowlist, magic bytes, cleanup).~~ (sudah dikerjakan)
-- Pisahkan `app.js` dan `server.js` untuk serverless.
+- ~~Pisahkan `app.js` dan `server.js` untuk serverless.~~ (sudah dikerjakan)
 - ~~Tambahkan constraint skema dan index yang hilang.~~ (sudah dikerjakan; sisa `bigint` dan unique `LOWER(email)`).
 - Samakan format numeric di response API.
 - Update README, tambahkan `.env.example` dan seed script.
@@ -283,6 +285,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 160 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 168 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.

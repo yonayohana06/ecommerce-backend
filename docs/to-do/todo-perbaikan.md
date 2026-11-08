@@ -441,6 +441,8 @@ Hasil: 17/17 test state machine lulus; `npm test` 45 pass + 115 skip (160 total)
 
 **Temuan:** 4.2.10.
 
+**Progres 8 November 2026:** selesai. `src/app.js` sekarang Express app murni tanpa `app.listen()`, `process.exit()`, atau inisialisasi koneksi; listener dipindah ke `src/server.js` yang memvalidasi env, mengecek database, menangani `SIGTERM`/`SIGINT`, dan menutup pool. `src/config/db.js` membatasi `pool.max` lewat `DB_POOL_MAX` (default 5, maksimal 20), menambahkan `pool.on("error")`, `idleTimeoutMillis`, dan `connectionTimeoutMillis`. `/health` (liveness) dan `/ready` (`SELECT 1`, 503 saat gagal) ditambahkan; `/200` dipertahankan sebagai alias `/health` tanpa Supabase RPC. `vercel.json` memakai `maxDuration: 30`. `npm start`/`npm run dev` sekarang menjalankan `src/server.js`.
+
 **Estimasi:** M
 
 **Files:**
@@ -451,22 +453,30 @@ Hasil: 17/17 test state machine lulus; `npm test` 45 pass + 115 skip (160 total)
 - `package.json`
 
 **Langkah:**
-- [ ] Ubah `src/app.js` menjadi pure Express app tanpa `app.listen()` dan `process.exit()`.
-- [ ] Buat `src/server.js` untuk listener lokal dan graceful shutdown.
-- [ ] Tambahkan `pool.on("error")`.
-- [ ] Batasi `pool.max` melalui env, misalnya default 5.
-- [ ] Gunakan Supabase connection pooler untuk production.
-- [ ] Tambahkan `/health` (proses hidup) dan `/ready` (cek `SELECT 1`).
-- [ ] Hapus atau alias endpoint `/200` yang membingungkan.
-- [ ] Tambahkan `maxDuration` untuk endpoint upload di Vercel jika diperlukan.
-- [ ] Pastikan `npm start` tetap berjalan lokal.
-- [ ] Tambahkan test bahwa import `app.js` tidak membuka listener.
+- [x] Ubah `src/app.js` menjadi pure Express app tanpa `app.listen()` dan `process.exit()`.
+- [x] Buat `src/server.js` untuk listener lokal dan graceful shutdown.
+- [x] Tambahkan `pool.on("error")`.
+- [x] Batasi `pool.max` melalui env, misalnya default 5.
+- [x] Gunakan Supabase connection pooler untuk production.
+- [x] Tambahkan `/health` (proses hidup) dan `/ready` (cek `SELECT 1`).
+- [x] Hapus atau alias endpoint `/200` yang membingungkan.
+- [x] Tambahkan `maxDuration` untuk endpoint upload di Vercel jika diperlukan.
+- [x] Pastikan `npm start` tetap berjalan lokal.
+- [x] Tambahkan test bahwa import `app.js` tidak membuka listener.
 
 **Definition of Done:**
-- [ ] `app.js` dapat di-import untuk test tanpa membuka port.
-- [ ] Server lokal berjalan via `server.js`.
-- [ ] Pool tidak membuka koneksi berlebihan di serverless.
-- [ ] `/health` dan `/ready` berfungsi.
+- [x] `app.js` dapat di-import untuk test tanpa membuka port.
+- [x] Server lokal berjalan via `server.js`.
+- [x] Pool tidak membuka koneksi berlebihan di serverless.
+- [x] `/health` dan `/ready` berfungsi.
+
+**Verifikasi:**
+```bash
+npm test
+npm run test:db
+```
+
+Hasil: `npm test` 53 pass + 115 skip (168 total), `npm run test:db` 168/168 lulus, coverage 82,70% lines / 78,13% branches / 88,59% functions, `npm run lint` OK untuk 78 file, `npm audit --omit=dev` 0 vulnerabilities. Smoke lokal `PORT=3456 node src/server.js`: `/health` 200, `/ready` 200, `/200` 200, `SIGTERM` keluar dengan kode 0.
 
 ### P1-05: Tambahkan constraint dan bersihkan index database
 

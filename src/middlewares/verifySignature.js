@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 const verifyPaymentSignature = (req, res, next) => {
     const { order_id, status_code, gross_amount, signature_key } = req.body;
