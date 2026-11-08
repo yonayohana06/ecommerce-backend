@@ -6,6 +6,8 @@ const ORDER_STATUS = require("../../src/constants/orderStatus");
 const {
   changeOrderStatus,
   mapTransactionStatus,
+  assertValidTransition,
+  TRANSITIONS,
 } = require("../../src/services/orderStatusService");
 const orderService = require("../../src/services/orderService");
 const paymentService = require("../../src/services/paymentService");
@@ -434,4 +436,61 @@ test("mapTransactionStatus memetakan status gateway yang dikenal", () => {
 test("mapTransactionStatus menolak status gateway yang tidak dikenal", () => {
   assert.throws(() => mapTransactionStatus("refund"), /tidak dikenal/i);
   assert.throws(() => mapTransactionStatus(""), /tidak dikenal/i);
+});
+
+test("state machine mencakup seluruh pasangan transisi valid dan invalid", () => {
+  const expectedTransitions = {
+    [ORDER_STATUS.PENDING]: [
+      ORDER_STATUS.PROCESSING,
+      ORDER_STATUS.PAID,
+      ORDER_STATUS.CANCELLED,
+      ORDER_STATUS.FAILED,
+    ],
+    [ORDER_STATUS.PROCESSING]: [
+      ORDER_STATUS.PAID,
+      ORDER_STATUS.CANCELLED,
+      ORDER_STATUS.FAILED,
+    ],
+    [ORDER_STATUS.PAID]: [ORDER_STATUS.SHIPPED],
+    [ORDER_STATUS.SHIPPED]: [ORDER_STATUS.COMPLETED],
+    [ORDER_STATUS.COMPLETED]: [],
+    [ORDER_STATUS.CANCELLED]: [ORDER_STATUS.PAID],
+    [ORDER_STATUS.FAILED]: [ORDER_STATUS.PAID],
+  };
+
+  const allStatuses = Object.values(ORDER_STATUS);
+
+  for (const currentStatus of allStatuses) {
+    assert.deepEqual(
+      new Set(TRANSITIONS[currentStatus]),
+      new Set(expectedTransitions[currentStatus]),
+      `transisi dari ${currentStatus} tidak sesuai spesifikasi`,
+    );
+
+    for (const newStatus of allStatuses) {
+      if (newStatus === currentStatus) {
+        assert.equal(
+          assertValidTransition(currentStatus, newStatus),
+          false,
+          `status ${currentStatus} ke dirinya sendiri harus idempotent`,
+        );
+        continue;
+      }
+
+      if (expectedTransitions[currentStatus].includes(newStatus)) {
+        assert.equal(
+          assertValidTransition(currentStatus, newStatus),
+          true,
+          `${currentStatus} -> ${newStatus} seharusnya valid`,
+        );
+      } else {
+        assert.throws(
+          () => assertValidTransition(currentStatus, newStatus),
+          (error) =>
+            error.statusCode === 400 && /transisi status tidak valid/i.test(error.message),
+          `${currentStatus} -> ${newStatus} seharusnya ditolak`,
+        );
+      }
+    }
+  }
 });

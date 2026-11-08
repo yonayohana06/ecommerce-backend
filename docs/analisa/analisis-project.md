@@ -199,6 +199,8 @@ PENDING/PROCESSING → CANCELLED/FAILED
 
 Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
+**Update 8 November 2026:** selesai. `src/services/orderStatusService.js` menjadi satu-satunya jalur perubahan status untuk admin, webhook, dan upload bukti bayar. Transisi valid: `PENDING → PROCESSING/PAID/CANCELLED/FAILED`, `PROCESSING → PAID/CANCELLED/FAILED`, `PAID → SHIPPED`, `SHIPPED → COMPLETED`, serta revert `CANCELLED/FAILED → PAID`; transisi lain ditolak 400. Perubahan status dan penyesuaian stok berjalan dalam satu transaksi, dan status yang sama bersifat idempotent. Test matriks mencakup seluruh 7×7 pasangan status. Audit log perubahan status masih tercatat sebagai item P2.
+
 #### 10. Pola deployment Vercel kurang cocok dengan kode saat ini
 
 `src/app.js` langsung menjalankan `app.listen()` dan `process.exit(1)` saat module di-import. Di Vercel:
@@ -281,6 +283,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 159 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 160 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.

@@ -401,7 +401,7 @@ Hasil: `npm test` 44 pass + 115 skip (159 total), `npm run test:db` 159/159 lulu
 
 **Temuan:** 4.2.9.
 
-**Progres 8 November 2026:** selesai bersama P0-02 di `src/services/orderStatusService.js`. Tambahan yang dibutuhkan P0-02: `PENDING → PAID` (webhook bisa settle sebelum bukti bayar) dan revert `CANCELLED/FAILED → PAID` agar stok dipotong kembali. Transisi lain ditolak 400.
+**Progres 8 November 2026:** selesai bersama P0-02 di `src/services/orderStatusService.js`. Tambahan yang dibutuhkan P0-02: `PENDING → PAID` (webhook bisa settle sebelum bukti bayar) dan revert `CANCELLED/FAILED → PAID` agar stok dipotong kembali. Transisi lain ditolak 400. Test matriks di `tests/orders/orderStatusService.test.js` memverifikasi seluruh 7×7 pasangan status: transisi yang diizinkan diterima, transisi lain ditolak 400, dan status ke dirinya sendiri idempotent tanpa mengubah stok.
 
 **Estimasi:** M
 
@@ -429,6 +429,13 @@ Hasil: `npm test` 44 pass + 115 skip (159 total), `npm run test:db` 159/159 lulu
 - [x] Status tidak bisa melompat atau mundur sembarangan.
 - [x] Admin dan webhook memakai aturan yang sama.
 - [x] Test state machine lulus.
+
+**Verifikasi:**
+```bash
+npm run test:db -- tests/orders/orderStatusService.test.js
+```
+
+Hasil: 17/17 test state machine lulus; `npm test` 45 pass + 115 skip (160 total), `npm run test:db` 160/160 lulus, coverage 82,18% lines / 77,41% branches / 87,91% functions, `npm run lint` OK untuk 74 file, `npm audit --omit=dev` 0 vulnerabilities.
 
 ### P1-04: Pisahkan entrypoint serverless dan perbaiki koneksi pool
 
