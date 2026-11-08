@@ -4,6 +4,7 @@ const orderController = require("../controllers/orderController");
 const verifyPaymentSignature = require("../middlewares/verifySignature");
 const { verifyUserToken } = require("../middlewares/authMiddleware");
 const validate = require("../middlewares/validate");
+const { webhookLimiter } = require("../middlewares/rateLimit");
 const {
   checkoutBody,
   listQuery,
@@ -38,6 +39,7 @@ router.post(
 // POST /api/orders/webhook/payment (Webhook callback dari Payment Gateway)
 router.post(
   "/webhook/payment",
+  webhookLimiter,
   verifyPaymentSignature,
   validate({ body: webhookBody }),
   orderController.handlePaymentWebhook,

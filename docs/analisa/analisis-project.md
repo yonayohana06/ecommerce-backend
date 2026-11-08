@@ -158,6 +158,8 @@ Selain itu:
 
 **Rekomendasi:** kembalikan pesan generik `401` untuk semua kegagalan login, normalisasi email, tambahkan rate limit, validasi panjang password, dan fail-fast jika secret wajib tidak diset.
 
+**Update 8 November 2026:** selesai. Login user dan admin sekarang selalu mengembalikan `401` dengan pesan generik `"Kredensial tidak valid."`; bcrypt dummy dipakai untuk email yang tidak dikenal, dan password diperiksa sebelum role. Email dinormalisasi `trim` + lowercase saat register/login dengan unique index `users_email_lower_unique` pada `LOWER(email)`. Registrasi user mewajibkan password minimal 8 karakter, maksimal 72 byte, serta mengandung huruf dan angka. Rate limit in-memory diterapkan pada login, register, webhook, dan upload dengan respons `429` + `Retry-After`. `helmet` aktif, `x-powered-by` dimatikan, environment wajib divalidasi saat startup, `JWT_SECRET`/`ADMIN_JWT_SECRET` wajib berbeda, fallback secret admin dihapus, dan token user/admin wajib memiliki `role` serta `type` yang sesuai. Total test menjadi 148 dan semuanya lulus; coverage 81,54% lines / 76,44% branches / 87,64% functions.
+
 #### 7. Produk nonaktif membuat keranjang macet
 
 `getCartByUser()` memfilter `p.is_active = true`, tetapi `checkout()` mengambil **semua** `cart_items`, termasuk produk yang sudah nonaktif. Jika produk dinonaktifkan saat masih di keranjang:
@@ -275,6 +277,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 125 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 148 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.

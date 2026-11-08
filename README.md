@@ -309,6 +309,8 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 > **Catatan:** Jangan commit file `.env` ke repository publik. Pastikan `.env` terdaftar di `.gitignore`.
+>
+> **Keamanan wajib:** `JWT_SECRET` dan `ADMIN_JWT_SECRET` harus diisi dan nilainya berbeda. Aplikasi gagal start jika salah satu kosong. Rate limit dapat disesuaikan lewat `RATE_LIMIT_LOGIN_MAX`, `RATE_LIMIT_REGISTER_MAX`, `RATE_LIMIT_WEBHOOK_MAX`, dan `RATE_LIMIT_UPLOAD_MAX` (default: 10/15 menit, 10/jam, 60/menit, 20/jam). Permintaan yang melewati batas menerima `429` dengan header `Retry-After`.
 
 ### 3. Migrasi Database
 Jalankan migrasi tabel database PostgreSQL:

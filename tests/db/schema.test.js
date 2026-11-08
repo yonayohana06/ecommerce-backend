@@ -144,6 +144,18 @@ test(
 );
 
 test(
+  "users memiliki unique index LOWER(email)",
+  { skip: !runDbTests },
+  async () => {
+    const index = await getIndex("users", "users_email_lower_unique");
+
+    assert.ok(index, "index users_email_lower_unique belum ada");
+    assert.match(index.indexdef, /UNIQUE/i);
+    assert.match(index.indexdef, /lower/i);
+  },
+);
+
+test(
   "users.role menolak nilai selain user/admin",
   { skip: !runDbTests },
   async () => {

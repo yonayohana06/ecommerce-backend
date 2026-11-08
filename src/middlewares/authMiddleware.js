@@ -28,7 +28,7 @@ const verifyAuthToken = (req, res, next) => {
       }
     }
 
-    req.user = decoded; // { userId, email, role, ... }
+    req.user = decoded; // { userId, email, role, type }
     next();
   } catch (error) {
     return res.status(401).json({
@@ -50,12 +50,12 @@ const verifyAdminToken = (req, res, next) => {
   }
 
   const token = authHeader.split(" ")[1];
-  const adminSecret = process.env.ADMIN_JWT_SECRET || process.env.JWT_SECRET;
+  const adminSecret = process.env.ADMIN_JWT_SECRET;
 
   try {
     const decoded = jwt.verify(token, adminSecret);
 
-    if (decoded.role !== "admin") {
+    if (decoded.role !== "admin" || decoded.type !== "admin") {
       return res.status(403).json({
         code: 403,
         message:
@@ -63,7 +63,7 @@ const verifyAdminToken = (req, res, next) => {
       });
     }
 
-    req.user = decoded;
+    req.user = decoded; // { userId, email, role, type }
     next();
   } catch (error) {
     return res.status(401).json({
@@ -94,6 +94,13 @@ const verifyUserToken = (req, res, next) => {
         code: 403,
         message:
           "Akses ditolak: Akun administrator tidak diperbolehkan mengakses fitur ini.",
+      });
+    }
+
+    if (decoded.role !== "user" || decoded.type !== "user") {
+      return res.status(403).json({
+        code: 403,
+        message: "Akses ditolak: token pengguna tidak valid.",
       });
     }
 

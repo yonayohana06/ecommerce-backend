@@ -1,39 +1,37 @@
-const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const db = require("../config/db");
+const {
+  normalizeEmail,
+  invalidCredentialsError,
+  comparePassword,
+} = require("../utils/auth");
 
 const loginAdmin = async ({ email, password }) => {
-  // 1. Cari user berdasarkan email
+  const normalizedEmail = normalizeEmail(email);
+
+  // 1. Cari user berdasarkan email yang dinormalisasi
   const userResult = await db.query(
-    "SELECT id, name, email, password, role FROM users WHERE email = $1;",
-    [email],
+    "SELECT id, name, email, password, role FROM users WHERE LOWER(email) = $1;",
+    [normalizedEmail],
   );
 
   if (userResult.rows.length === 0) {
-    const error = new Error("Akun tidak ditemukan");
-    error.statusCode = 404;
-    throw error;
+    // Tetap jalankan bcrypt agar waktu respons mirip dengan email yang ada.
+    await comparePassword(password);
+    throw invalidCredentialsError();
   }
 
   const user = userResult.rows[0];
 
-  // 2. Proteksi Pemisahan: Wajib role 'admin'
-  if (user.role !== "admin") {
-    const error = new Error(
-      "Akses ditolak. Akun Anda tidak memiliki hak akses administrator.",
-    );
-    error.statusCode = 403;
-    throw error;
+  // 2. Cocokkan password sebelum memeriksa role.
+  const isPasswordMatch = await comparePassword(password, user.password);
+  if (!isPasswordMatch) {
+    throw invalidCredentialsError();
   }
 
-  // 3. Cocokkan raw password dengan hashed password di DB
-  const isPasswordMatch = await bcrypt.compare(password, user.password);
-  if (!isPasswordMatch) {
-    const error = new Error(
-      "Kredensial tidak valid (Email atau Password salah).",
-    );
-    error.statusCode = 401;
-    throw error;
+  // 3. Wajib role 'admin'; kegagalan tetap generik agar role tidak dapat dienumerasi.
+  if (user.role !== "admin") {
+    throw invalidCredentialsError();
   }
 
   // 4. Buat JWT Admin Token

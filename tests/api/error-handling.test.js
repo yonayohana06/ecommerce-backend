@@ -13,7 +13,12 @@ let baseUrl;
 
 const userToken = () =>
   signToken(
-    { userId: 1, email: "user-validation@example.com", role: "user" },
+    {
+      userId: 1,
+      email: "user-validation@example.com",
+      role: "user",
+      type: "user",
+    },
     process.env.JWT_SECRET,
   );
 

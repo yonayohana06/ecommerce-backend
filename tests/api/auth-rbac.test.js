@@ -108,7 +108,7 @@ dbTest("registrasi password terlalu pendek ditolak 400", async () => {
   });
 
   assert.equal(response.status, 400);
-  assert.match(response.body.message, /minimal 6 karakter/i);
+  assert.match(response.body.message, /minimal 8 karakter/i);
 });
 
 dbTest("login user dengan password salah ditolak 401", async () => {
@@ -124,15 +124,15 @@ dbTest("login user dengan password salah ditolak 401", async () => {
 dbTest("admin tidak bisa login lewat portal user", async () => {
   const response = await loginUser(baseUrl, adminCredentials);
 
-  assert.equal(response.status, 403);
-  assert.match(response.body.message, /portal admin/i);
+  assert.equal(response.status, 401);
+  assert.match(response.body.message, /kredensial tidak valid/i);
 });
 
 dbTest("user tidak bisa login lewat portal admin", async () => {
   const response = await loginAdmin(baseUrl, userCredentials);
 
-  assert.equal(response.status, 403);
-  assert.match(response.body.message, /hak akses administrator/i);
+  assert.equal(response.status, 401);
+  assert.match(response.body.message, /kredensial tidak valid/i);
 });
 
 dbTest("profil user dapat diambil dengan token user", async () => {

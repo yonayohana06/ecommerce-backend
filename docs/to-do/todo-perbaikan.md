@@ -280,6 +280,8 @@ Hasil: ketiganya mengembalikan JSON 400/400/404 tanpa detail database; `npm test
 
 **Temuan:** 4.2.6 (enumerasi akun, tanpa rate limit, password policy lemah, fallback secret).
 
+**Progres 8 November 2026:** selesai. Login user dan admin kini selalu mengembalikan `401` generik `"Kredensial tidak valid."`; email yang tidak dikenal tetap menjalankan `bcrypt.compare` dengan hash dummy, dan pengecekan password dilakukan sebelum pengecekan role. Email dinormalisasi `trim` + lowercase di schema dan service, dengan unique index `users_email_lower_unique` pada `LOWER(email)`. Registrasi mewajibkan password minimal 8 karakter, maksimal 72 byte, serta mengandung huruf dan angka. Rate limit diterapkan pada login, register, webhook, dan upload (respons `429` + `Retry-After`). `helmet` aktif dan `x-powered-by` dimatikan. Environment wajib divalidasi saat startup melalui `src/config/env.js`; `JWT_SECRET` dan `ADMIN_JWT_SECRET` wajib berbeda, dan fallback secret admin ke secret user dihapus. Token user/admin wajib memiliki `role` dan `type` yang sesuai.
+
 **Estimasi:** M (0.5–1 hari)
 
 **Files:**
@@ -292,30 +294,32 @@ Hasil: ketiganya mengembalikan JSON 400/400/404 tanpa detail database; `npm test
 - `tests/auth/*`
 
 **Langkah:**
-- [ ] Kembalikan pesan generik `401` untuk semua kegagalan login.
-- [ ] Lakukan pengecekan password sebelum pengecekan role, atau gunakan pesan/response yang seragam.
-- [ ] Normalisasi email menjadi lowercase + trim saat register dan login.
-- [ ] Tambahkan unique index `LOWER(email)` atau gunakan `citext`.
-- [ ] Validasi format email.
-- [ ] Tetapkan panjang password minimal 8 dan maksimal 72 byte; tolak password lemah.
-- [ ] Tambahkan rate limit untuk login/register/webhook/upload.
-- [ ] Tambahkan `helmet` dan matikan `x-powered-by`.
-- [ ] Validasi environment variable wajib saat startup dan fail-fast.
-- [ ] Hapus fallback `ADMIN_JWT_SECRET` ke `JWT_SECRET`.
-- [ ] Pastikan token user wajib memiliki `role === "user"` dan `type === "user"`.
-- [ ] Tambahkan test enumerasi, rate limit, dan pemisahan user/admin.
+- [x] Kembalikan pesan generik `401` untuk semua kegagalan login.
+- [x] Lakukan pengecekan password sebelum pengecekan role, atau gunakan pesan/response yang seragam.
+- [x] Normalisasi email menjadi lowercase + trim saat register dan login.
+- [x] Tambahkan unique index `LOWER(email)` atau gunakan `citext`.
+- [x] Validasi format email.
+- [x] Tetapkan panjang password minimal 8 dan maksimal 72 byte; tolak password lemah.
+- [x] Tambahkan rate limit untuk login/register/webhook/upload.
+- [x] Tambahkan `helmet` dan matikan `x-powered-by`.
+- [x] Validasi environment variable wajib saat startup dan fail-fast.
+- [x] Hapus fallback `ADMIN_JWT_SECRET` ke `JWT_SECRET`.
+- [x] Pastikan token user wajib memiliki `role === "user"` dan `type === "user"`.
+- [x] Tambahkan test enumerasi, rate limit, dan pemisahan user/admin.
 
 **Definition of Done:**
-- [ ] Email tidak bisa dienumerasi dari status code.
-- [ ] Rate limit mengembalikan 429 setelah batas tercapai.
-- [ ] Aplikasi gagal start jika secret wajib tidak diset.
-- [ ] Token user tidak bisa mengakses endpoint admin dan sebaliknya.
-- [ ] Test auth lulus.
+- [x] Email tidak bisa dienumerasi dari status code.
+- [x] Rate limit mengembalikan 429 setelah batas tercapai.
+- [x] Aplikasi gagal start jika secret wajib tidak diset.
+- [x] Token user tidak bisa mengakses endpoint admin dan sebaliknya.
+- [x] Test auth lulus.
 
 **Verifikasi:**
 ```bash
 npm test -- tests/auth
 ```
+
+Hasil: `npm test` 44 pass + 104 skip (148 total), `npm run test:db` 148/148 lulus, coverage 81,54% lines / 76,44% branches / 87,64% functions, `npm run lint` OK untuk 74 file, `npm ci` berhasil, `npm audit --omit=dev` 0 vulnerabilities. Migrasi index berhasil diuji `down` lalu `up` pada database test.
 
 ---
 

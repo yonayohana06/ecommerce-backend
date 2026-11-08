@@ -17,13 +17,23 @@ let baseUrl;
 
 const adminToken = () =>
   signToken(
-    { userId: 1, email: "admin-validation@example.com", role: "admin" },
+    {
+      userId: 1,
+      email: "admin-validation@example.com",
+      role: "admin",
+      type: "admin",
+    },
     process.env.ADMIN_JWT_SECRET,
   );
 
 const userToken = () =>
   signToken(
-    { userId: 1, email: "user-validation@example.com", role: "user" },
+    {
+      userId: 1,
+      email: "user-validation@example.com",
+      role: "user",
+      type: "user",
+    },
     process.env.JWT_SECRET,
   );
 

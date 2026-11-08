@@ -1,8 +1,13 @@
-const express = require("express");
-const cors = require("cors");
-const supabase = require("./config/supabase");
 require("dotenv").config();
 
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const { validateEnv } = require("./config/env");
+
+validateEnv(process.env, { requireDatabase: false });
+
+const supabase = require("./config/supabase");
 const db = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const orderRoutes = require("./routes/orderRoutes");
@@ -15,6 +20,9 @@ const errorHandler = require("./middlewares/errorHandler");
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+app.use(helmet());
 app.use(express.json());
 
 // Konfigurasi CORS
@@ -61,6 +69,8 @@ app.use(errorHandler);
 // Fungsi untuk cek database sebelum server menerima traffic
 const startServer = async () => {
   try {
+    validateEnv();
+
     // Eksekusi query ringan untuk tes koneksi
     const res = await db.query("SELECT NOW()");
     console.log("✅ PostgreSQL Connected successfully at:", res.rows[0].now);

@@ -81,7 +81,18 @@ test(
         const migrations = await client.query(
           "SELECT name FROM pgmigrations ORDER BY id",
         );
-        assert.equal(migrations.rowCount, 5);
+        assert.equal(migrations.rowCount, 6);
+
+        const emailIndex = await client.query(
+          `SELECT indexdef
+           FROM pg_indexes
+           WHERE schemaname = 'public'
+             AND tablename = 'users'
+             AND indexname = 'users_email_lower_unique'`,
+        );
+        assert.equal(emailIndex.rowCount, 1);
+        assert.match(emailIndex.rows[0].indexdef, /UNIQUE/i);
+        assert.match(emailIndex.rows[0].indexdef, /lower/i);
 
         const statusColumn = await client.query(
           `SELECT is_nullable, column_default
