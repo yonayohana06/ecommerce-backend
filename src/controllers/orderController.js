@@ -1,4 +1,5 @@
 const orderService = require("../services/orderService");
+const { mapTransactionStatus } = require("../services/orderStatusService");
 
 const handleCheckout = async (req, res) => {
   try {
@@ -94,31 +95,30 @@ const getUserOrderDetail = async (req, res) => {
 
 const handlePaymentWebhook = async (req, res) => {
   try {
-    const { order_id, transaction_status } = req.body;
+    const { order_id, transaction_status, gross_amount } = req.body;
 
-    if (!order_id || !transaction_status) {
+    if (
+      !order_id ||
+      !transaction_status ||
+      gross_amount === undefined ||
+      gross_amount === null ||
+      gross_amount === ""
+    ) {
       return res.status(400).json({
         code: 400,
         message:
-          "Payload tidak valid. order_id dan transaction_status wajib disertakan.",
+          "Payload tidak valid. order_id, transaction_status, dan gross_amount wajib disertakan.",
       });
     }
 
-    // Mapping status dari payment gateway ke status internal database
-    let newStatus;
-    if (
-      ["capture", "settlement", "success", "PAID"].includes(transaction_status)
-    ) {
-      newStatus = "PAID";
-    } else if (["cancel", "deny", "expire"].includes(transaction_status)) {
-      newStatus = "CANCELLED";
-    } else {
-      newStatus = "PENDING";
-    }
+    // Tolak status yang tidak dikenal; jangan default ke PENDING.
+    const newStatus = mapTransactionStatus(transaction_status);
 
     const updatedOrder = await orderService.updateOrderStatus({
       orderId: order_id,
       targetStatus: newStatus,
+      grossAmount: gross_amount,
+      source: "webhook",
     });
 
     // Payment gateway selalu mengharapkan HTTP 200 OK agar tidak mengirim ulang webhook

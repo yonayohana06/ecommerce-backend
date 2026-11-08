@@ -105,6 +105,8 @@ npm run migrate:up
 
 **Temuan:** 4.1.2 (webhook tidak mengembalikan/memotong stok).
 
+**Progres 8 November 2026:** selesai. Service baru `src/services/orderStatusService.js` menjadi satu-satunya jalur perubahan status, dipakai admin, webhook, dan upload bukti bayar. Test `tests/orders/orderStatusService.test.js` 16/16 lulus; smoke test HTTP webhook + admin juga lulus.
+
 **Estimasi:** M (0.5–1 hari)
 
 **Files:**
@@ -116,34 +118,36 @@ npm run migrate:up
 - `tests/orders/*`
 
 **Langkah:**
-- [ ] Buat satu service transaksional `changeOrderStatus({ orderId, newStatus, source })`.
-- [ ] Di dalam service: `BEGIN`, lock order dengan `FOR UPDATE`, validasi transisi, sesuaikan stok, update status, `COMMIT`.
-- [ ] Pindahkan logika restock/re-deduct dari `paymentService.updateOrderStatus()` ke service baru.
-- [ ] Arahkan endpoint admin dan webhook ke service yang sama.
-- [ ] Validasi `gross_amount` dari webhook terhadap `orders.total_amount`.
-- [ ] Tolak `transaction_status` yang tidak dikenal; jangan default ke `PENDING`.
-- [ ] Pastikan webhook idempotent: status yang sama tidak mengubah stok dua kali.
-- [ ] Tambahkan test:
-  - [ ] Cancel/expire mengembalikan stok.
-  - [ ] Revert dari CANCELLED ke PAID memotong stok kembali.
-  - [ ] Webhook duplikat tidak mengubah stok dua kali.
-  - [ ] Nominal tidak cocok ditolak.
-  - [ ] Transisi tidak valid ditolak.
+- [x] Buat satu service transaksional `changeOrderStatus({ orderId, newStatus, source })`.
+- [x] Di dalam service: `BEGIN`, lock order dengan `FOR UPDATE`, validasi transisi, sesuaikan stok, update status, `COMMIT`.
+- [x] Pindahkan logika restock/re-deduct dari `paymentService.updateOrderStatus()` ke service baru.
+- [x] Arahkan endpoint admin dan webhook ke service yang sama.
+- [x] Validasi `gross_amount` dari webhook terhadap `orders.total_amount`.
+- [x] Tolak `transaction_status` yang tidak dikenal; jangan default ke `PENDING`.
+- [x] Pastikan webhook idempotent: status yang sama tidak mengubah stok dua kali.
+- [x] Tambahkan test:
+  - [x] Cancel/expire mengembalikan stok.
+  - [x] Revert dari CANCELLED ke PAID memotong stok kembali.
+  - [x] Webhook duplikat tidak mengubah stok dua kali.
+  - [x] Nominal tidak cocok ditolak.
+  - [x] Transisi tidak valid ditolak.
 
 **Definition of Done:**
-- [ ] Tidak ada jalur update status yang melewati service baru.
-- [ ] Stok konsisten untuk seluruh transisi.
-- [ ] Webhook dan admin menghasilkan perilaku yang sama.
-- [ ] Semua test orders/webhook lulus.
+- [x] Tidak ada jalur update status yang melewati service baru.
+- [x] Stok konsisten untuk seluruh transisi.
+- [x] Webhook dan admin menghasilkan perilaku yang sama.
+- [x] Semua test orders/webhook lulus.
 
 **Verifikasi:**
 ```bash
-npm test -- tests/orders
+RUN_DB_TESTS=1 node --test tests/orders/*.test.js
 ```
 
 ### P0-03: Update dependency yang rentan
 
 **Temuan:** 4.1.3 (8 kerentanan: 1 critical, 3 high, 4 moderate).
+
+**Progres 8 November 2026:** selesai. `npm update` + `npm audit fix` menghilangkan seluruh critical/high. `npm audit --omit=dev` sekarang **0 vulnerabilities**. Sisa 4 moderate hanya di devDependencies (`glob`/`minimatch` lewat `node-pg-migrate` dan `nodemon`); belum ada versi perbaikan tanpa downgrade, jadi risiko diterima karena hanya tooling lokal/CI. Smoke test HTTP (`SMOKE P0-03 OK`) dan regresi P0-02 (`SMOKE P0-02 OK`) lulus.
 
 **Estimasi:** S (1–2 jam)
 
@@ -152,24 +156,26 @@ npm test -- tests/orders
 - `package-lock.json`
 
 **Langkah:**
-- [ ] Jalankan `npm update` untuk Express, Multer, pg, dan Supabase.
-- [ ] Jalankan `npm audit fix` jika diperlukan.
-- [ ] Pindahkan `node-pg-migrate` ke `devDependencies`.
-- [ ] Evaluasi `overrides` untuk `glob`/`minimatch` atau terima risiko moderate karena hanya dipakai CLI/CI.
-- [ ] Jalankan `npm ci` dari lockfile baru.
-- [ ] Jalankan seluruh test dan smoke test endpoint.
+- [x] Jalankan `npm update` untuk Express, Multer, pg, dan Supabase.
+- [x] Jalankan `npm audit fix` jika diperlukan.
+- [x] Pindahkan `node-pg-migrate` ke `devDependencies`.
+- [x] Evaluasi `overrides` untuk `glob`/`minimatch` atau terima risiko moderate karena hanya dipakai CLI/CI.
+- [x] Jalankan `npm ci` dari lockfile baru.
+- [x] Jalankan seluruh test dan smoke test endpoint.
 
 **Definition of Done:**
-- [ ] `npm audit --omit=dev` tidak menghasilkan critical/high.
-- [ ] Tidak ada breaking change pada API.
-- [ ] `npm ci` dan test berhasil.
+- [x] `npm audit --omit=dev` tidak menghasilkan critical/high.
+- [x] Tidak ada breaking change pada API.
+- [x] `npm ci` dan test berhasil.
 
 **Verifikasi:**
 ```bash
 npm audit --omit=dev
 npm ci
-npm test
+RUN_DB_TESTS=1 npm test
 ```
+
+Hasil: `npm audit --omit=dev` → `found 0 vulnerabilities`; `npm ci` berhasil; test 39/39 lulus; smoke test products/categories/login admin/summary/webhook/multipart lulus.
 
 ### P0-04: Tambahkan automated test dan CI
 
@@ -363,6 +369,8 @@ npm test -- tests/auth
 
 **Temuan:** 4.2.9.
 
+**Progres 8 November 2026:** selesai bersama P0-02 di `src/services/orderStatusService.js`. Tambahan yang dibutuhkan P0-02: `PENDING → PAID` (webhook bisa settle sebelum bukti bayar) dan revert `CANCELLED/FAILED → PAID` agar stok dipotong kembali. Transisi lain ditolak 400.
+
 **Estimasi:** M
 
 **Files:**
@@ -373,21 +381,22 @@ npm test -- tests/auth
 - `tests/orders/*`
 
 **Langkah:**
-- [ ] Definisikan transisi valid:
-  - [ ] `PENDING → PROCESSING`
-  - [ ] `PROCESSING → PAID`
-  - [ ] `PAID → SHIPPED`
-  - [ ] `SHIPPED → COMPLETED`
-  - [ ] `PENDING/PROCESSING → CANCELLED/FAILED`
-- [ ] Tolak transisi lain dengan 400/409.
-- [ ] Terapkan aturan yang sama untuk admin dan webhook.
-- [ ] Pastikan perubahan status tidak valid tidak mengubah stok.
-- [ ] Tambahkan test seluruh transisi valid dan invalid.
+- [x] Definisikan transisi valid:
+  - [x] `PENDING → PROCESSING`
+  - [x] `PROCESSING → PAID`
+  - [x] `PAID → SHIPPED`
+  - [x] `SHIPPED → COMPLETED`
+  - [x] `PENDING/PROCESSING → CANCELLED/FAILED`
+  - [x] Tambahan: `PENDING → PAID`, `CANCELLED/FAILED → PAID`.
+- [x] Tolak transisi lain dengan 400/409.
+- [x] Terapkan aturan yang sama untuk admin dan webhook.
+- [x] Pastikan perubahan status tidak valid tidak mengubah stok.
+- [x] Tambahkan test seluruh transisi valid dan invalid.
 
 **Definition of Done:**
-- [ ] Status tidak bisa melompat atau mundur sembarangan.
-- [ ] Admin dan webhook memakai aturan yang sama.
-- [ ] Test state machine lulus.
+- [x] Status tidak bisa melompat atau mundur sembarangan.
+- [x] Admin dan webhook memakai aturan yang sama.
+- [x] Test state machine lulus.
 
 ### P1-04: Pisahkan entrypoint serverless dan perbaiki koneksi pool
 

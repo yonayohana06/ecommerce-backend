@@ -1,6 +1,7 @@
 const { pool } = require("../config/db");
 const supabase = require("../config/supabase");
 const ORDER_STATUS = require("../constants/orderStatus");
+const orderStatusService = require("./orderStatusService");
 
 // Helper untuk membuat Signed URL dari nama file di Private Bucket
 const generateSignedUrl = async (filePath) => {
@@ -26,175 +27,85 @@ const generateSignedUrl = async (filePath) => {
 
 // User Upload Bukti Transfer
 const submitPaymentProof = async (userId, orderId, file) => {
-  const client = await pool.connect();
+  // Pre-check agar file tidak diunggah untuk pesanan yang jelas tidak valid.
+  const orderCheck = await pool.query(
+    `SELECT id, status FROM orders WHERE id = $1 AND user_id = $2`,
+    [orderId, userId],
+  );
+
+  if (
+    orderCheck.rows.length === 0 ||
+    orderCheck.rows[0].status !== ORDER_STATUS.PENDING
+  ) {
+    const error = new Error(
+      "Pesanan tidak ditemukan atau sudah tidak dalam status PENDING",
+    );
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const fileExt = file.originalname.split(".").pop();
+  const fileName = `proof_${orderId}_${Date.now()}.${fileExt}`;
+
+  const { error: storageError } = await supabase.storage
+    .from("payment-proofs")
+    .upload(fileName, file.buffer, {
+      contentType: file.mimetype,
+      upsert: true,
+    });
+
+  if (storageError) {
+    throw new Error(
+      `Gagal mengunggah file ke Storage: ${storageError.message}`,
+    );
+  }
 
   try {
-    await client.query("BEGIN");
+    // Perubahan status tetap melalui service transaksional yang sama.
+    const result = await orderStatusService.changeOrderStatus({
+      orderId,
+      newStatus: ORDER_STATUS.PROCESSING,
+      source: "user",
+      userId,
+      requiredStatus: ORDER_STATUS.PENDING,
+      paymentProofUrl: fileName,
+    });
 
-    // Cek apakah pesanan ada, milik user yang sesuai, dan statusnya masih PENDING
-    const orderCheck = await client.query(
-      `SELECT id, status FROM orders 
-       WHERE id = $1 AND user_id = $2 AND status = $3::order_status 
-       FOR UPDATE`,
-      [orderId, userId, ORDER_STATUS.PENDING],
-    );
-
-    if (orderCheck.rows.length === 0) {
-      const error = new Error(
-        "Pesanan tidak ditemukan atau sudah tidak dalam status PENDING",
-      );
-      error.statusCode = 400;
-      throw error;
-    }
-
-    // Upload file bukti bayar ke Supabase Storage
-    const fileExt = file.originalname.split(".").pop();
-    const fileName = `proof_${orderId}_${Date.now()}.${fileExt}`;
-
-    const { error: storageError } = await supabase.storage
-      .from("payment-proofs")
-      .upload(fileName, file.buffer, {
-        contentType: file.mimetype,
-        upsert: true,
-      });
-
-    if (storageError) {
-      throw new Error(
-        `Gagal mengunggah file ke Storage: ${storageError.message}`,
-      );
-    }
-
-    // Ambil URL (Public URL / simpan fileName jika pakai Private Bucket)
-    // const { data: publicUrlData } = supabase.storage
-    //   .from("payment-proofs")
-    //   .getPublicUrl(fileName);
-
-    // const proofUrl = publicUrlData.publicUrl;
-
-    // Update status order menjadi 'PROCESSING' dan simpan bukti transfer
-    const updateQuery = `
-      UPDATE orders
-      SET 
-        status = 'PROCESSING'::order_status,
-        payment_proof_url = $1,
-        payment_submitted_at = NOW(),
-        updated_at = NOW()
-      WHERE id = $2
-      RETURNING *;
-    `;
-    const result = await client.query(updateQuery, [fileName, orderId]);
-
-    await client.query("COMMIT");
-    return result.rows[0];
+    return result.order;
   } catch (error) {
-    await client.query("ROLLBACK");
+    // Jangan tinggalkan file orphan jika update database gagal.
+    const { error: removeError } = await supabase.storage
+      .from("payment-proofs")
+      .remove([fileName]);
+
+    if (removeError) {
+      console.error(
+        `Gagal menghapus file bukti bayar orphan '${fileName}':`,
+        removeError.message,
+      );
+    }
+
     throw error;
-  } finally {
-    client.release();
   }
 };
 
 // Admin Verifikasi Status Order
 const updateOrderStatus = async (orderId, newStatus) => {
-  const client = await pool.connect();
+  const { order } = await orderStatusService.changeOrderStatus({
+    orderId,
+    newStatus,
+    source: "admin",
+  });
 
-  try {
-    await client.query("BEGIN");
+  const updatedOrder = { ...order };
 
-    // Ambil order & itemnya
-    const orderQuery = await client.query(
-      "SELECT * FROM orders WHERE id = $1 FOR UPDATE",
-      [orderId],
+  if (updatedOrder.payment_proof_url) {
+    updatedOrder.payment_proof_url = await generateSignedUrl(
+      updatedOrder.payment_proof_url,
     );
-    if (orderQuery.rows.length === 0) {
-      const error = new Error("Pesanan tidak ditemukan");
-      error.statusCode = 404;
-      throw error;
-    }
-
-    const currentOrder = orderQuery.rows[0];
-    const oldStatus = currentOrder.status;
-
-    // Kategori Status
-    const isNewStatusCancelled =
-      newStatus === ORDER_STATUS.CANCELLED || newStatus === ORDER_STATUS.FAILED;
-    const isOldStatusCancelled =
-      oldStatus === ORDER_STATUS.CANCELLED || oldStatus === ORDER_STATUS.FAILED;
-
-    // KASUS A: Pembatalan Baru (Aktif -> CANCELLED/FAILED) => Kembalikan Stok (+qty)
-    if (isNewStatusCancelled && !isOldStatusCancelled) {
-      const itemsQuery = await client.query(
-        "SELECT product_id, quantity FROM order_items WHERE order_id = $1",
-        [orderId],
-      );
-
-      for (const item of itemsQuery.rows) {
-        await client.query(
-          "UPDATE products SET stock = stock + $1, updated_at = NOW() WHERE id = $2",
-          [item.quantity, item.product_id],
-        );
-      }
-    }
-
-    // KASUS B: Revert Salah Tolak (CANCELLED/FAILED -> Aktif/PAID) => ambil Stok Kembali (-qty)
-    if (!isNewStatusCancelled && isOldStatusCancelled) {
-      const itemsQuery = await client.query(
-        "SELECT product_id, quantity FROM order_items WHERE order_id = $1",
-        [orderId],
-      );
-
-      // Cek ketersediaan semua stok sebelum diambil
-      for (const item of itemsQuery.rows) {
-        const productQuery = await client.query(
-          "SELECT stock, name FROM products WHERE id = $1 FOR UPDATE",
-          [item.product_id],
-        );
-
-        if (productQuery.rows.length === 0) {
-          throw new Error(
-            `Produk dengan ID ${item.product_id} sudah tidak ada`,
-          );
-        }
-
-        const product = productQuery.rows[0];
-        if (product.stock < item.quantity) {
-          const error = new Error(
-            `Gagal mengembalikan status. Stok untuk produk '${product.name}' tidak mencukupi (Sisa stok: ${product.stock}, dibutuhkan: ${item.quantity}).`,
-          );
-          error.statusCode = 400;
-          throw error;
-        }
-      }
-
-      // Ambil stok jika semua produk aman
-      for (const item of itemsQuery.rows) {
-        await client.query(
-          "UPDATE products SET stock = stock - $1, updated_at = NOW() WHERE id = $2",
-          [item.quantity, item.product_id],
-        );
-      }
-    }
-
-    // Update status
-    const updateResult = await client.query(
-      "UPDATE orders SET status = $1::order_status, updated_at = NOW() WHERE id = $2 RETURNING *",
-      [newStatus, orderId],
-    );
-
-    await client.query("COMMIT");
-    const updatedOrder = updateResult.rows[0];
-    if (updatedOrder.payment_proof_url) {
-      updatedOrder.payment_proof_url = await generateSignedUrl(
-        updatedOrder.payment_proof_url,
-      );
-    }
-    return updatedOrder;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally {
-    client.release();
   }
+
+  return updatedOrder;
 };
 
 // Admin Get All Orders (Filter & Pagination & Signed URL)

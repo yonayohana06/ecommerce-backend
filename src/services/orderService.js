@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
 const ORDER_STATUS = require("../constants/orderStatus");
+const orderStatusService = require("./orderStatusService");
 const { generateSignedUrl } = require("./paymentService");
 
 const checkout = async (userId, shippingAddress) => {
@@ -289,30 +290,25 @@ const getUserOrderDetail = async ({ userId, orderId }) => {
 };
 
 // Update status pesanan (digunakan untuk webhook payment gateway)
-const updateOrderStatus = async ({ orderId, targetStatus }) => {
-  const query = `
-    UPDATE orders 
-    SET status = $1::order_status, updated_at = NOW() 
-    WHERE id = $2 AND status != $1::order_status
-    RETURNING id, user_id, status, total_amount;
-  `;
+const updateOrderStatus = async ({
+  orderId,
+  targetStatus,
+  grossAmount,
+  source = "webhook",
+}) => {
+  const { order, changed, previousStatus } =
+    await orderStatusService.changeOrderStatus({
+      orderId,
+      newStatus: targetStatus,
+      grossAmount,
+      source,
+    });
 
-  const result = await pool.query(query, [targetStatus, orderId]);
-
-  if (result.rows.length === 0) {
-    const checkOrder = await pool.query(
-      "SELECT id, status FROM orders WHERE id = $1",
-      [orderId],
-    );
-    if (checkOrder.rows.length === 0) {
-      const error = new Error(`Order ID ${orderId} tidak ditemukan.`);
-      error.statusCode = 404;
-      throw error;
-    }
-    return { ...checkOrder.rows[0], already_processed: true };
-  }
-
-  return { ...result.rows[0], already_processed: false };
+  return {
+    ...order,
+    previous_status: previousStatus,
+    already_processed: !changed,
+  };
 };
 
 module.exports = {

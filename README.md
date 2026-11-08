@@ -247,12 +247,14 @@ Base URL: `http://localhost:3000/api`
 | `GET` | `/api/admin/orders/summary` | Admin | Mengambil ringkasan statistik pesanan (total pesanan, total omset dari status valid, dan perincian order per status). |
 | `GET` | `/api/admin/orders` | Admin | Mengambil daftar pesanan dengan filter status, pencarian (order ID / email user), pagination, dan signed URL bukti transfer. |
 | `GET` | `/api/admin/orders/:orderId` | Admin | Mengambil detail lengkap pesanan spesifik, data customer, item produk, dan signed URL bukti transfer. |
-| `PATCH` | `/api/admin/orders/:orderId/status` | Admin | Mengubah status pesanan (misal: `PAID`, `CANCELLED`). Mengembalikan stok produk otomatis jika dibatalkan, atau memotong stok kembali jika pesanan batal diaktifkan kembali. |
+| `PATCH` | `/api/admin/orders/:orderId/status` | Admin | Mengubah status pesanan sesuai transisi yang valid. Mengembalikan stok otomatis jika dibatalkan, atau memotong stok kembali jika pesanan batal diaktifkan kembali. |
 
 ### 💳 10. Webhook Payment Gateway — `/api/orders/webhook/payment`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
-| `POST` | `/api/orders/webhook/payment` | Webhook | Menerima callback notifikasi status pembayaran dari Payment Gateway. Request divalidasi dengan signature HMAC SHA-512. |
+| `POST` | `/api/orders/webhook/payment` | Webhook | Menerima callback notifikasi status pembayaran dari Payment Gateway. Request divalidasi dengan signature HMAC SHA-512; `gross_amount` harus sama dengan `total_amount` pesanan. |
+
+> **Sinkronisasi status & stok:** admin, webhook, dan upload bukti bayar memakai service transaksional yang sama (`orderStatusService`). Webhook duplikat bersifat idempotent (stok tidak berubah dua kali), dan `transaction_status` yang tidak dikenal ditolak dengan HTTP 400.
 
 ---
 

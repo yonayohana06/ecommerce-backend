@@ -86,6 +86,8 @@ Contoh: gateway mengirim `cancel/expire` → order menjadi `CANCELLED`, tetapi s
 
 **Rekomendasi:** satukan seluruh perubahan status ke satu service transaksional, validasi `gross_amount` terhadap `orders.total_amount`, dan gunakan state machine status yang jelas.
 
+**Update 8 November 2026:** sudah diperbaiki. `src/services/orderStatusService.js` menjadi satu-satunya jalur perubahan status untuk admin, webhook, dan upload bukti bayar. Service mengunci order, memvalidasi transisi dan `gross_amount`, menyesuaikan stok, serta idempotent untuk status yang sama. `transaction_status` yang tidak dikenal sekarang ditolak (HTTP 400).
+
 #### 3. Dependency memiliki kerentanan
 
 `npm audit --omit=dev` menemukan **8 kerentanan**: **1 critical, 3 high, 4 moderate**, antara lain:
@@ -97,6 +99,8 @@ Contoh: gateway mengirim `cancel/expire` → order menjadi `CANCELLED`, tetapi s
 Update tersedia: Express `5.3.0`, Multer `2.5.0`, `pg` `8.23.1`, `@supabase/supabase-js` `2.119.0`.
 
 **Rekomendasi:** jalankan `npm update`/`npm audit fix`, lalu audit ulang. Pindahkan `node-pg-migrate` ke `devDependencies` karena hanya dipakai untuk migrasi/CI.
+
+**Update 8 November 2026:** selesai. Versi terpasang: Express `5.3.0`, Multer `2.5.0`, pg `8.23.1`, `@supabase/supabase-js` `2.119.0`. `node-pg-migrate@9.0.0` dipindah ke `devDependencies`, sehingga `npm audit --omit=dev` melaporkan **0 vulnerabilities**. Sisa 4 moderate ada di devDependencies (`glob`/`minimatch` via `node-pg-migrate` dan `nodemon`); belum ada perbaikan tanpa downgrade, diterima karena hanya tooling lokal/CI. `npm ci` dan seluruh 39 test lulus.
 
 ### 4.2 Tinggi
 
@@ -237,7 +241,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 ### P0 — Segera
 
 1. **Baseline & perbaiki migrasi:** sinkronkan skema, buat `pgmigrations`, perbaiki timestamp, constraint, dan index duplikat. Pertahankan `numeric(12)` scale 0. *(Sebagian besar sudah dikerjakan melalui migration `1794119284866_add-integrity-constraints`.)*
-2. **Perbaiki webhook:** satu jalur transaksi untuk update status + stok, validasi nominal, state machine.
+2. **Perbaiki webhook:** satu jalur transaksi untuk update status + stok, validasi nominal, state machine. *(Sudah dikerjakan melalui `orderStatusService`.)*
 3. **Update dependency:** Express, Multer, pg, Supabase; audit ulang.
 4. **Tambahkan test + CI:** auth, cart, checkout, webhook, migrasi dari DB kosong.
 5. **Global error handler + validasi input:** JSON error konsisten, jangan bocorkan pesan DB.
@@ -265,8 +269,8 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaksional, dan pemisahan auth user/admin sudah benar. Namun, untuk dianggap production-ready, ada tiga hal yang harus dibereskan lebih dulu:
 
-1. **Migrasi database yang tidak sinkron.**
-2. **Inkonsistensi stok di webhook.**
-3. **Tidak adanya automated test.**
+1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
+2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
+3. **Tidak adanya automated test.** *(Sedang dikerjakan; sudah ada test admin, skema database, dan order status.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.
