@@ -217,7 +217,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 ### 4.3 Sedang
 
 - **Format angka tidak konsisten:** endpoint produk/cart mengembalikan numeric sebagai string (`"1950000.00"`), sedangkan order list/detail mengubahnya menjadi number. Frontend bisa bingung. **Update 8 November 2026:** selesai; `src/utils/serializers.js` menyeragamkan seluruh harga/total menjadi JSON number di product, cart, checkout, order user/admin, webhook, upload bukti bayar, dan dashboard.
-- **N+1 signed URL:** setiap order memanggil `createSignedUrl` satu per satu; untuk `limit=100` bisa lambat dan rawan timeout Vercel. Pertimbangkan `createSignedUrls` batch atau cache.
+- **N+1 signed URL:** setiap order memanggil `createSignedUrl` satu per satu; untuk `limit=100` bisa lambat dan rawan timeout Vercel. **Update 8 November 2026:** selesai. `generateSignedUrls` batch + cache in-memory (TTL 5 menit) diterapkan di `getAllOrdersForAdmin` dan `getUserOrders`.
 - **Index berlebihan:** ada index duplikat di tabel `products`; bersihkan agar write tidak lambat.
 - **Pencarian admin lambat saat data besar:** `CAST(o.id AS TEXT) ILIKE ...` tidak memakai index; pertimbangkan exact match untuk ID numerik.
 - **Index `orders(status, created_at)` belum ada:** penting untuk dashboard admin saat order sudah banyak.

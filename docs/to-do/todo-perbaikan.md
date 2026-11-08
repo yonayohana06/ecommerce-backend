@@ -664,12 +664,40 @@ Hasil: 26/26 test observability dan error handler lulus. `npm test` 80 pass + 12
 
 **Temuan:** N+1 signed URL pada order list.
 
-**Files:** `src/services/paymentService.js`, `src/services/orderService.js`
+**Progres 8 November 2026:** selesai. `src/utils/signedUrlCache.js` menyediakan cache in-memory dengan TTL 5 menit (lebih pendek dari 60 menit signed URL Supabase). `src/services/paymentService.js` menambahkan `generateSignedUrls` (batch via `createSignedUrls` Supabase) dan `clearSignedUrlCache`; `generateSignedUrl` tunggal sekarang memanggil batch internal + cache. `getAllOrdersForAdmin` dan `getUserOrders` (di `orderService.js`) pakai batch untuk semua proof URL dalam satu halaman (satu panggilan storage, bukan N). Cache hit tidak memanggil storage. Test mock disesuaikan untuk `createSignedUrls` batch. 11 tes baru (cache 4, batch 7) lulus, total 215/215 tes DB.
 
-- [ ] Gunakan `createSignedUrls` batch untuk banyak order.
-- [ ] Tambahkan cache in-memory dengan TTL lebih pendek dari masa berlaku signed URL.
-- [ ] Pastikan cache tidak menyajikan URL kedaluwarsa.
-- [ ] Tambahkan test/mock untuk memastikan jumlah panggilan storage berkurang.
+**Estimasi:** S
+
+**Files:** 
+- `src/utils/signedUrlCache.js` (baru)
+- `src/services/paymentService.js`
+- `src/services/orderService.js`
+- `tests/utils/signedUrlCache.test.js` (baru)
+- `tests/services/paymentService.signedUrl.test.js` (baru)
+- `tests/api/payment-webhook.test.js` (mock batch)
+
+**Langkah:**
+- [x] Gunakan `createSignedUrls` batch untuk banyak order.
+- [x] Tambahkan cache in-memory dengan TTL lebih pendek dari masa berlaku signed URL.
+- [x] Pastikan cache tidak menyajikan URL kedaluwarsa.
+- [x] Tambahkan test/mock untuk memastikan jumlah panggilan storage berkurang.
+
+**Definition of Done:**
+- [x] Daftar order admin/user pakai batch signed URL (satu panggilan storage per halaman).
+- [x] Cache hit tidak memanggil storage lagi.
+- [x] Cache TTL 5 menit (lebih pendek dari 60 menit signed URL).
+- [x] Test memverifikasi batch call dan cache hit.
+
+**Verifikasi:**
+```bash
+npm test
+npm run test:db
+npm run test:coverage
+npm run lint
+npm audit --omit=dev
+```
+
+Hasil: 11 tes P2-01 lulus. `npm test` 91 pass + 124 skip (215 total), `npm run test:db` 215/215 lulus, coverage 87,19% lines / 77,92% branches / 91,59% functions, `npm run lint` OK untuk 90 file, `npm audit --omit=dev` 0 vulnerabilities, `git diff --check` bersih.
 
 ### P2-02: Audit log admin
 

@@ -3,8 +3,13 @@ const { serializeOrder, toNumber } = require("../utils/serializers");
 const supabase = require("../config/supabase");
 const ORDER_STATUS = require("../constants/orderStatus");
 const orderStatusService = require("./orderStatusService");
+const { signedUrlCache } = require("../utils/signedUrlCache");
 
-// Helper untuk membuat Signed URL dari nama file di Private Bucket
+const SIGNED_URL_EXPIRES_IN = 3600; // 60 menit
+
+// Helper untuk membuat Signed URL dari satu nama file di Private Bucket.
+// Hasil dicache di memori dengan TTL lebih pendek dari masa berlaku signed URL
+// (3600 detik) sehingga klien tidak menerima URL yang sudah kedaluwarsa.
 const generateSignedUrl = async (filePath) => {
   if (!filePath) return null;
 
@@ -13,17 +18,66 @@ const generateSignedUrl = async (filePath) => {
     return filePath;
   }
 
-  // Buat Signed URL berlaku selama 60 menit (3600 detik)
-  const { data, error } = await supabase.storage
-    .from("payment-proofs")
-    .createSignedUrl(filePath, 3600);
-
-  if (error || !data) {
-    console.error("Error generating signed URL:", error);
-    return null;
+  const cached = signedUrlCache.get(filePath);
+  if (cached) {
+    return cached;
   }
 
-  return data.signedUrl;
+  const urls = await generateSignedUrls([filePath]);
+  return urls.get(filePath) || null;
+};
+
+// Buat Signed URL untuk banyak file dalam satu panggilan storage
+// (createSignedUrls batch) untuk menghindari pola N+1 pada daftar order.
+const generateSignedUrls = async (filePaths) => {
+  const result = new Map();
+  const uncached = [];
+
+  for (const filePath of filePaths) {
+    if (!filePath) continue;
+
+    // URL utuh tidak perlu ditandatangani dan tidak dicache.
+    if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+      result.set(filePath, filePath);
+      continue;
+    }
+
+    const cached = signedUrlCache.get(filePath);
+    if (cached) {
+      result.set(filePath, cached);
+      continue;
+    }
+
+    uncached.push(filePath);
+  }
+
+  if (uncached.length > 0) {
+    const { data, error } = await supabase.storage
+      .from("payment-proofs")
+      .createSignedUrls(uncached, SIGNED_URL_EXPIRES_IN);
+
+    if (error || !Array.isArray(data)) {
+      console.error("Error generating signed URLs:", error);
+      return result;
+    }
+
+    for (const item of data) {
+      if (!item || !item.path) continue;
+      const signedUrl = item.signedURL || item.signedUrl || null;
+      if (signedUrl) {
+        signedUrlCache.set(item.path, signedUrl);
+        result.set(item.path, signedUrl);
+      }
+    }
+  }
+
+  return result;
+};
+
+// Hapus seluruh cache signed URL (digunakan uji coba dan admin saat bukti
+// diganti, sehingga URL baru segera dihasilkan).
+const clearSignedUrlCache = () => {
+  signedUrlCache.clear();
 };
 
 // User Upload Bukti Transfer
@@ -179,17 +233,20 @@ const getAllOrdersForAdmin = async ({
     pool.query(countQuery, queryValues),
   ]);
 
-  // Convert payment_proof_url dari path menjadi Signed URL secara paralel
-  const orders = await Promise.all(
-    ordersResult.rows.map(async (order) => {
-      if (order.payment_proof_url) {
-        order.payment_proof_url = await generateSignedUrl(
-          order.payment_proof_url,
-        );
-      }
-      return serializeOrder(order);
-    }),
-  );
+  // Convert payment_proof_url dari path menjadi Signed URL secara batch
+  // (satu panggilan createSignedUrls untuk semua order dalam halaman).
+  const proofUrls = ordersResult.rows
+    .map((order) => order.payment_proof_url)
+    .filter(Boolean);
+  const signedProofUrls = await generateSignedUrls(proofUrls);
+
+  const orders = ordersResult.rows.map((order) => {
+    if (order.payment_proof_url) {
+      order.payment_proof_url =
+        signedProofUrls.get(order.payment_proof_url) || null;
+    }
+    return serializeOrder(order);
+  });
 
   const totalItems = parseInt(countResult.rows[0].count, 10);
   const totalPages = Math.ceil(totalItems / limitNum) || 1;
@@ -299,6 +356,8 @@ const getOrderSummaryForAdmin = async () => {
 
 module.exports = {
   generateSignedUrl,
+  generateSignedUrls,
+  clearSignedUrlCache,
   submitPaymentProof,
   updateOrderStatus,
   getAllOrdersForAdmin,

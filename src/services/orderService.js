@@ -2,7 +2,7 @@ const { pool } = require("../config/db");
 const { serializeOrder } = require("../utils/serializers");
 const ORDER_STATUS = require("../constants/orderStatus");
 const orderStatusService = require("./orderStatusService");
-const { generateSignedUrl } = require("./paymentService");
+const { generateSignedUrls } = require("./paymentService");
 
 const checkout = async (userId, shippingAddress) => {
   const client = await pool.connect();
@@ -187,19 +187,23 @@ const getUserOrders = async ({ userId, status, page = 1, limit = 10 }) => {
     pool.query(countQuery, queryValues),
   ]);
 
-  // Generate Signed URL untuk payment_proof_url dan format angka
-  const orders = await Promise.all(
-    ordersResult.rows.map(async (order) => {
-      let signedProofUrl = order.payment_proof_url;
-      if (order.payment_proof_url) {
-        signedProofUrl = await generateSignedUrl(order.payment_proof_url);
-      }
-      return serializeOrder({
-        ...order,
-        payment_proof_url: signedProofUrl,
-      });
-    }),
-  );
+  // Generate Signed URL untuk payment_proof_url secara batch
+  // (satu panggilan createSignedUrls untuk semua order dalam halaman).
+  const proofUrls = ordersResult.rows
+    .map((order) => order.payment_proof_url)
+    .filter(Boolean);
+  const signedProofUrls = await generateSignedUrls(proofUrls);
+
+  const orders = ordersResult.rows.map((order) => {
+    let signedProofUrl = order.payment_proof_url;
+    if (order.payment_proof_url) {
+      signedProofUrl = signedProofUrls.get(order.payment_proof_url) || null;
+    }
+    return serializeOrder({
+      ...order,
+      payment_proof_url: signedProofUrl,
+    });
+  });
 
   const totalItems = countResult.rows[0]?.count
     ? parseInt(countResult.rows[0].count, 10)

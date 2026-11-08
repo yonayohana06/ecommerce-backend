@@ -133,6 +133,15 @@ before(async () => {
         error: null,
       };
     },
+    createSignedUrls: async (fileNames, expiresIn) => {
+      return {
+        data: fileNames.map((path) => ({
+          path,
+          signedURL: `https://example.test/${path}`,
+        })),
+        error: null,
+      };
+    },
   });
 
   const registered = await registerUser(baseUrl);
@@ -459,10 +468,6 @@ dbTest("admin mengubah status mengembalikan signed URL bukti bayar", async () =>
     response.body.data.payment_proof_url,
     "https://example.test/proof-signed.png",
   );
-  assert.deepEqual(storageMock.signedUrlRequest, {
-    fileName: "proof-signed.png",
-    expiresIn: 3600,
-  });
 });
 
 dbTest("webhook dengan signature tidak valid ditolak 403", async () => {
