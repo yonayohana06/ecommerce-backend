@@ -1,6 +1,6 @@
 const authService = require("../services/authService");
 
-const handleRegister = async (req, res) => {
+const handleRegister = async (req, res, next) => {
   try {
     const { name, email, password } = req.body;
 
@@ -26,15 +26,11 @@ const handleRegister = async (req, res) => {
       data: newUser,
     });
   } catch (error) {
-    const statusCode = error.statusCode || 400;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message,
-    });
+    return next(error);
   }
 };
 
-const handleLogin = async (req, res) => {
+const handleLogin = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -53,15 +49,11 @@ const handleLogin = async (req, res) => {
       data: loginData,
     });
   } catch (error) {
-    const statusCode = error.statusCode || 401;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message,
-    });
+    return next(error);
   }
 };
 
-const handleGetProfile = async (req, res) => {
+const handleGetProfile = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const profile = await authService.getUserProfile(userId);
@@ -72,11 +64,7 @@ const handleGetProfile = async (req, res) => {
       data: profile,
     });
   } catch (error) {
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message,
-    });
+    return next(error);
   }
 };
 

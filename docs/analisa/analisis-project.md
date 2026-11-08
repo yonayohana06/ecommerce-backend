@@ -137,6 +137,8 @@ Masalah lain:
 
 **Rekomendasi:** gunakan validator seperti Zod/Joi/express-validator, tambahkan global error handler dan JSON 404 handler, serta jangan pernah mengirim pesan error database ke client.
 
+**Update 8 November 2026:** selesai. Validasi memakai `zod@4.6.7` melalui `src/middlewares/validate.js` dan schema di `src/validation/*` untuk auth, produk, kategori, cart, order, pembayaran, dan pagination. ID divalidasi sebagai integer positif. `src/middlewares/errorHandler.js` memetakan error PostgreSQL (`22P02`, `22001`, `22003` → 400; `23505` → 409; `23503`, `23514` → 400), malformed JSON, dan error Multer menjadi JSON 400, serta menyembunyikan detail error tak dikenal di balik 500 generik. Route tidak dikenal sekarang menghasilkan 404 JSON. Seluruh controller meneruskan error ke handler global dan tidak lagi mengirim `error.message` ke client. Test bertambah menjadi 125 dan semuanya lulus; coverage 80,35% lines / 74,07% branches / 86,25% functions. `npm audit --omit=dev` kembali bersih (0 vulnerabilities).
+
 #### 6. Autentikasi rentan enumerasi akun dan brute force
 
 Login membedakan respons:
@@ -273,6 +275,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 90 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 125 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.

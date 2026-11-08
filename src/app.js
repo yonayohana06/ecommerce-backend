@@ -9,6 +9,8 @@ const orderRoutes = require("./routes/orderRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const mainRoutes = require("./routes/index");
+const notFound = require("./middlewares/notFound");
+const errorHandler = require("./middlewares/errorHandler");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -51,6 +53,10 @@ app.use("/api/cart", cartRoutes);
 
 app.use("/api", paymentRoutes);
 app.use("/api", mainRoutes);
+
+// Route tidak dikenal dan error tak tertangani selalu dikembalikan sebagai JSON.
+app.use(notFound);
+app.use(errorHandler);
 
 // Fungsi untuk cek database sebelum server menerima traffic
 const startServer = async () => {

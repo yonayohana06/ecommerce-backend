@@ -1,6 +1,6 @@
 const categoryService = require("../services/categoryService");
 
-const getCategoryList = async (req, res) => {
+const getCategoryList = async (req, res, next) => {
   try {
     const { search } = req.query;
     const categories = await categoryService.getAllCategories({ search });
@@ -11,16 +11,11 @@ const getCategoryList = async (req, res) => {
       data: categories,
     });
   } catch (error) {
-    console.error("Error fetching admin categories:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const getCategoryDetail = async (req, res) => {
+const getCategoryDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -46,16 +41,11 @@ const getCategoryDetail = async (req, res) => {
       data: category,
     });
   } catch (error) {
-    console.error("Error fetching admin category detail:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const createCategory = async (req, res) => {
+const createCategory = async (req, res, next) => {
   try {
     const { name, slug, icon_url } = req.body;
 
@@ -78,16 +68,11 @@ const createCategory = async (req, res) => {
       data: newCategory,
     });
   } catch (error) {
-    console.error("Error creating category:", error);
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message || "Internal Server Error",
-    });
+    return next(error);
   }
 };
 
-const updateCategory = async (req, res) => {
+const updateCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -113,16 +98,11 @@ const updateCategory = async (req, res) => {
       data: updatedCategory,
     });
   } catch (error) {
-    console.error("Error updating category:", error);
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message || "Internal Server Error",
-    });
+    return next(error);
   }
 };
 
-const deleteCategory = async (req, res) => {
+const deleteCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -157,12 +137,7 @@ const deleteCategory = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error deleting category:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 

@@ -1,7 +1,7 @@
 const orderService = require("../services/orderService");
 const { mapTransactionStatus } = require("../services/orderStatusService");
 
-const handleCheckout = async (req, res) => {
+const handleCheckout = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const { shipping_address } = req.body;
@@ -21,19 +21,11 @@ const handleCheckout = async (req, res) => {
       data: order,
     });
   } catch (error) {
-    console.error("Error during checkout:", error);
-
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message:
-        error.message ||
-        "Terjadi kesalahan pada server saat transaksi checkout.",
-    });
+    return next(error);
   }
 };
 
-const getUserOrders = async (req, res) => {
+const getUserOrders = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const { status, page, limit } = req.query;
@@ -52,16 +44,11 @@ const getUserOrders = async (req, res) => {
       pagination: result.pagination,
     });
   } catch (error) {
-    console.error("Error fetching user orders:", error);
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message || "Internal Server Error",
-    });
+    return next(error);
   }
 };
 
-const getUserOrderDetail = async (req, res) => {
+const getUserOrderDetail = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const { id } = req.params;
@@ -84,16 +71,11 @@ const getUserOrderDetail = async (req, res) => {
       data: order,
     });
   } catch (error) {
-    console.error("Error fetching user order detail:", error);
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message || "Internal Server Error",
-    });
+    return next(error);
   }
 };
 
-const handlePaymentWebhook = async (req, res) => {
+const handlePaymentWebhook = async (req, res, next) => {
   try {
     const { order_id, transaction_status, gross_amount } = req.body;
 
@@ -128,12 +110,7 @@ const handlePaymentWebhook = async (req, res) => {
       data: updatedOrder,
     });
   } catch (error) {
-    console.error("Webhook error:", error.message);
-    const statusCode = error.statusCode || 400;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message,
-    });
+    return next(error);
   }
 };
 

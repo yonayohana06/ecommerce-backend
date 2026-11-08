@@ -1,6 +1,6 @@
 const cartService = require("../services/cartService");
 
-const addToCart = async (req, res) => {
+const addToCart = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const { product_id, quantity } = req.body;
@@ -20,16 +20,11 @@ const addToCart = async (req, res) => {
       data: item,
     });
   } catch (error) {
-    console.error("Error addToCart:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const getMyCart = async (req, res) => {
+const getMyCart = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const cart = await cartService.getCartByUser(userId);
@@ -49,16 +44,11 @@ const getMyCart = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error getMyCart:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const updateQuantity = async (req, res) => {
+const updateQuantity = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const { id } = req.params;
@@ -93,17 +83,11 @@ const updateQuantity = async (req, res) => {
       data: updated,
     });
   } catch (error) {
-    console.error("Error updating cart quantity:", error);
-
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message || "Internal Server Error",
-    });
+    return next(error);
   }
 };
 
-const deleteCartItem = async (req, res) => {
+const deleteCartItem = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const { id } = req.params;
@@ -130,16 +114,11 @@ const deleteCartItem = async (req, res) => {
       data: { id: deleted.id },
     });
   } catch (error) {
-    console.error("Error deleteCartItem:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const clearCart = async (req, res) => {
+const clearCart = async (req, res, next) => {
   try {
     const userId = req.user.userId;
 
@@ -153,12 +132,7 @@ const clearCart = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error clearing cart:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 

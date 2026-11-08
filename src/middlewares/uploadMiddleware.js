@@ -1,4 +1,5 @@
 const multer = require("multer");
+const { HttpError } = require("../utils/httpError");
 
 const storage = multer.memoryStorage();
 
@@ -11,7 +12,7 @@ const upload = multer({
     if (file.mimetype.startsWith("image/")) {
       cb(null, true);
     } else {
-      cb(new Error("Hanya file gambar yang diperbolehkan!"), false);
+      cb(new HttpError(400, "Hanya file gambar yang diperbolehkan!"), false);
     }
   },
 });

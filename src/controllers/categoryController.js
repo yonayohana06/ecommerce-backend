@@ -1,6 +1,6 @@
 const categoryService = require("../services/categoryService");
 
-const getCategoryList = async (req, res) => {
+const getCategoryList = async (req, res, next) => {
   try {
     const { search } = req.query;
     const categories = await categoryService.getAllCategories({ search });
@@ -11,16 +11,11 @@ const getCategoryList = async (req, res) => {
       data: categories,
     });
   } catch (error) {
-    console.error("Error fetching categories:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const getCategoryDetail = async (req, res) => {
+const getCategoryDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -46,16 +41,11 @@ const getCategoryDetail = async (req, res) => {
       data: category,
     });
   } catch (error) {
-    console.error("Error fetching category detail:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const getCategoryBySlug = async (req, res) => {
+const getCategoryBySlug = async (req, res, next) => {
   try {
     const { slug } = req.params;
 
@@ -81,12 +71,7 @@ const getCategoryBySlug = async (req, res) => {
       data: category,
     });
   } catch (error) {
-    console.error("Error fetching category by slug:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 

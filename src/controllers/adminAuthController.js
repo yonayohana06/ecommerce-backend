@@ -1,6 +1,6 @@
 const adminAuthService = require("../services/adminAuthService");
 
-const handleLogin = async (req, res) => {
+const handleLogin = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -19,15 +19,11 @@ const handleLogin = async (req, res) => {
       data: loginData,
     });
   } catch (error) {
-    const statusCode = error.statusCode || 401;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message,
-    });
+    return next(error);
   }
 };
 
-const handleGetProfile = async (req, res) => {
+const handleGetProfile = async (req, res, next) => {
   try {
     const adminId = req.user.userId;
     const profile = await adminAuthService.getAdminProfile(adminId);
@@ -38,11 +34,7 @@ const handleGetProfile = async (req, res) => {
       data: profile,
     });
   } catch (error) {
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message,
-    });
+    return next(error);
   }
 };
 

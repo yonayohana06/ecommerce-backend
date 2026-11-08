@@ -5,7 +5,13 @@ const {
   verifyAdminToken,
   verifyUserToken,
 } = require("../middlewares/authMiddleware");
+const validate = require("../middlewares/validate");
 const upload = require("../middlewares/uploadMiddleware");
+const {
+  orderIdParams,
+  statusBody,
+  adminOrdersQuery,
+} = require("../validation/paymentSchemas");
 
 // Endpoint get summary untuk dashboard admin
 router.get(
@@ -18,6 +24,7 @@ router.get(
 router.get(
   "/admin/orders",
   verifyAdminToken,
+  validate({ query: adminOrdersQuery }),
   paymentController.getAdminOrders,
 );
 
@@ -25,6 +32,7 @@ router.get(
 router.get(
   "/admin/orders/:orderId",
   verifyAdminToken,
+  validate({ params: orderIdParams }),
   paymentController.getAdminOrderDetail,
 );
 
@@ -32,6 +40,7 @@ router.get(
 router.post(
   "/orders/:orderId/pay",
   verifyUserToken,
+  validate({ params: orderIdParams }),
   upload.single("proof_image"),
   paymentController.uploadPaymentProof,
 );
@@ -40,6 +49,7 @@ router.post(
 router.patch(
   "/admin/orders/:orderId/status",
   verifyAdminToken,
+  validate({ params: orderIdParams, body: statusBody }),
   paymentController.changeOrderStatusByAdmin,
 );
 

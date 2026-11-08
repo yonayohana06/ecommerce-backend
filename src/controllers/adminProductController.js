@@ -1,6 +1,6 @@
 const productService = require("../services/productService");
 
-const getProductList = async (req, res) => {
+const getProductList = async (req, res, next) => {
   try {
     const { category_id, search, page = 1, limit = 10 } = req.query;
 
@@ -18,16 +18,11 @@ const getProductList = async (req, res) => {
       pagination: products.pagination,
     });
   } catch (error) {
-    console.error("Error fetching products:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const getProductDetail = async (req, res) => {
+const getProductDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -54,16 +49,11 @@ const getProductDetail = async (req, res) => {
       data: product,
     });
   } catch (error) {
-    console.error("Error fetching product detail:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const createProduct = async (req, res) => {
+const createProduct = async (req, res, next) => {
   try {
     const { name, price, stock } = req.body;
 
@@ -82,16 +72,11 @@ const createProduct = async (req, res) => {
       data: newProduct,
     });
   } catch (error) {
-    console.error("Error creating product:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const updateProduct = async (req, res) => {
+const updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -117,16 +102,11 @@ const updateProduct = async (req, res) => {
       data: updatedProduct,
     });
   } catch (error) {
-    console.error("Error updating product:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const deleteProduct = async (req, res) => {
+const deleteProduct = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -159,12 +139,7 @@ const deleteProduct = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error deleting product:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 

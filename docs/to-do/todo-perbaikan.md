@@ -231,6 +231,8 @@ Hasil: `npm test` 11 pass + 79 skip (DB test), `npm run test:db` 90/90 lulus, `n
 
 **Temuan:** 4.2.5 (error DB bocor, `category_id=abc` → 500, HTML 404/400).
 
+**Progres 8 November 2026:** selesai. Validasi memakai `zod@4.6.7` melalui middleware `src/middlewares/validate.js`; schema berada di `src/validation/*`. Seluruh body, params, dan query pada endpoint auth, produk, kategori, cart, order, pembayaran, serta pagination divalidasi. ID wajib berupa integer positif (bukan `isNaN`). Global error handler memetakan `22P02`/`22001`/`22003` → 400, `23505` → 409, `23503`/`23514` → 400, malformed JSON dan error Multer → 400 JSON, sedangkan error tak dikenal → 500 generik tanpa detail database. Route tidak dikenal menghasilkan 404 JSON. Properti `error: error.message` dihapus dari seluruh response controller.
+
 **Estimasi:** M (1 hari)
 
 **Files:**
@@ -243,27 +245,27 @@ Hasil: `npm test` 11 pass + 79 skip (DB test), `npm run test:db` 90/90 lulus, `n
 - Seluruh controller terkait
 
 **Langkah:**
-- [ ] Tambahkan Zod/Joi untuk validasi body, params, dan query.
-- [ ] Buat schema validasi untuk auth, product, category, cart, order, payment, dan pagination.
-- [ ] Validasi ID sebagai integer positif (bukan hanya `isNaN`).
-- [ ] Tambahkan global error handler:
-  - [ ] `22P02`/invalid input → 400.
-  - [ ] `23505` duplicate → 409.
-  - [ ] `23503` foreign key → 400.
-  - [ ] `23514` check constraint → 400.
-  - [ ] Error tak dikenal → 500 tanpa detail DB.
-- [ ] Tambahkan JSON 404 handler.
-- [ ] Tangani error `express.json()` (malformed JSON) sebagai JSON 400.
-- [ ] Tangani error Multer (file terlalu besar/tipe salah) sebagai JSON 400.
-- [ ] Hapus `error: error.message` dari response production.
-- [ ] Tambahkan test untuk semua kasus di atas.
+- [x] Tambahkan Zod untuk validasi body, params, dan query.
+- [x] Buat schema validasi untuk auth, product, category, cart, order, payment, dan pagination.
+- [x] Validasi ID sebagai integer positif (bukan hanya `isNaN`).
+- [x] Tambahkan global error handler:
+  - [x] `22P02`/invalid input → 400.
+  - [x] `23505` duplicate → 409.
+  - [x] `23503` foreign key → 400.
+  - [x] `23514` check constraint → 400.
+  - [x] Error tak dikenal → 500 tanpa detail DB.
+- [x] Tambahkan JSON 404 handler.
+- [x] Tangani error `express.json()` (malformed JSON) sebagai JSON 400.
+- [x] Tangani error Multer (file terlalu besar/tipe salah) sebagai JSON 400.
+- [x] Hapus `error: error.message` dari response production.
+- [x] Tambahkan test untuk semua kasus di atas.
 
 **Definition of Done:**
-- [ ] Semua input invalid menghasilkan 400 JSON yang rapi.
-- [ ] Tidak ada pesan error database yang sampai ke client.
-- [ ] Route tidak dikenal menghasilkan 404 JSON.
-- [ ] Malformed JSON menghasilkan 400 JSON.
-- [ ] Test validasi dan error handler lulus.
+- [x] Semua input invalid menghasilkan 400 JSON yang rapi.
+- [x] Tidak ada pesan error database yang sampai ke client.
+- [x] Route tidak dikenal menghasilkan 404 JSON.
+- [x] Malformed JSON menghasilkan 400 JSON.
+- [x] Test validasi dan error handler lulus.
 
 **Verifikasi:**
 ```bash
@@ -271,6 +273,8 @@ curl -i "http://localhost:3001/api/products?category_id=abc"
 curl -i -H 'Content-Type: application/json' -d '{bad json' http://localhost:3001/api/auth/login
 curl -i http://localhost:3001/api/does-not-exist
 ```
+
+Hasil: ketiganya mengembalikan JSON 400/400/404 tanpa detail database; `npm test` 32 pass + 93 skip, `npm run test:db` 125/125 lulus, coverage 80,35% lines / 74,07% branches / 86,25% functions. `npm ci` berhasil dan `npm audit --omit=dev` melaporkan 0 vulnerabilities.
 
 ### P0-06: Hardening autentikasi
 
@@ -650,11 +654,11 @@ npm test -- tests/auth
 
 ## Definition of Done Project
 
-- [ ] `npm test` berhasil dan CI berjalan di setiap PR.
-- [ ] `npm audit --omit=dev` tanpa critical/high.
-- [ ] Migration berhasil dari database kosong.
-- [ ] Tidak ada endpoint yang membocorkan error internal.
-- [ ] Stok konsisten pada checkout, cancel, dan webhook.
-- [ ] Semua endpoint menggunakan validasi input.
+- [x] `npm test` berhasil dan CI berjalan di setiap PR.
+- [x] `npm audit --omit=dev` tanpa critical/high.
+- [x] Migration berhasil dari database kosong.
+- [x] Tidak ada endpoint yang membocorkan error internal.
+- [x] Stok konsisten pada checkout, cancel, dan webhook.
+- [x] Semua endpoint menggunakan validasi input.
 - [ ] Dokumentasi sesuai dengan implementasi.
 - [ ] Aplikasi dapat berjalan di lokal dan Vercel tanpa masalah lifecycle.

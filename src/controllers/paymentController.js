@@ -1,7 +1,7 @@
 const paymentService = require("../services/paymentService");
 const ORDER_STATUS = require("../constants/orderStatus");
 
-const uploadPaymentProof = async (req, res) => {
+const uploadPaymentProof = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const { orderId } = req.params;
@@ -26,16 +26,11 @@ const uploadPaymentProof = async (req, res) => {
       data: updatedOrder,
     });
   } catch (error) {
-    console.error("Error uploading payment proof:", error);
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message || "Internal Server Error",
-    });
+    return next(error);
   }
 };
 
-const changeOrderStatusByAdmin = async (req, res) => {
+const changeOrderStatusByAdmin = async (req, res, next) => {
   try {
     const { orderId } = req.params;
     const { status } = req.body;
@@ -59,17 +54,12 @@ const changeOrderStatusByAdmin = async (req, res) => {
       data: updatedOrder,
     });
   } catch (error) {
-    console.error("Error changing order status:", error);
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message || "Internal Server Error",
-    });
+    return next(error);
   }
 };
 
 // Admin Get List All Orders
-const getAdminOrders = async (req, res) => {
+const getAdminOrders = async (req, res, next) => {
   try {
     const { status, search, page, limit } = req.query;
 
@@ -94,15 +84,11 @@ const getAdminOrders = async (req, res) => {
       pagination: result.pagination,
     });
   } catch (error) {
-    console.error("Error fetching admin orders:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-    });
+    return next(error);
   }
 };
 
-const getAdminOrderDetail = async (req, res) => {
+const getAdminOrderDetail = async (req, res, next) => {
   try {
     const { orderId } = req.params;
 
@@ -114,16 +100,11 @@ const getAdminOrderDetail = async (req, res) => {
       data: orderDetail,
     });
   } catch (error) {
-    console.error("Error fetching admin order detail:", error);
-    const statusCode = error.statusCode || 500;
-    return res.status(statusCode).json({
-      code: statusCode,
-      message: error.message || "Internal Server Error",
-    });
+    return next(error);
   }
 };
 
-const getAdminOrderSummary = async (req, res) => {
+const getAdminOrderSummary = async (req, res, next) => {
   try {
     const summary = await paymentService.getOrderSummaryForAdmin();
 
@@ -133,11 +114,7 @@ const getAdminOrderSummary = async (req, res) => {
       data: summary,
     });
   } catch (error) {
-    console.error("Error fetching admin order summary:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-    });
+    return next(error);
   }
 };
 

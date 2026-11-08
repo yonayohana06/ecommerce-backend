@@ -1,6 +1,6 @@
 const productService = require("../services/productService");
 
-const getProductList = async (req, res) => {
+const getProductList = async (req, res, next) => {
   try {
     const { category_id, search, page = 1, limit = 10 } = req.query;
 
@@ -18,16 +18,11 @@ const getProductList = async (req, res) => {
       pagination: products.pagination,
     });
   } catch (error) {
-    console.error("Error fetching products:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 
-const getProductDetail = async (req, res) => {
+const getProductDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
 
@@ -54,12 +49,7 @@ const getProductDetail = async (req, res) => {
       data: product,
     });
   } catch (error) {
-    console.error("Error fetching product detail:", error);
-    return res.status(500).json({
-      code: 500,
-      message: "Internal Server Error",
-      error: error.message,
-    });
+    return next(error);
   }
 };
 

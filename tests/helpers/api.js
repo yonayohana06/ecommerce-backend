@@ -31,7 +31,7 @@ async function startTestServer() {
 async function request(
   baseUrl,
   path,
-  { method = "GET", token, body, formData, headers = {} } = {},
+  { method = "GET", token, body, rawBody, formData, headers = {} } = {},
 ) {
   const requestHeaders = { ...headers };
   const init = { method, headers: requestHeaders };
@@ -42,6 +42,10 @@ async function request(
 
   if (formData) {
     init.body = formData;
+  } else if (rawBody !== undefined) {
+    requestHeaders["Content-Type"] =
+      requestHeaders["Content-Type"] || "application/json";
+    init.body = rawBody;
   } else if (body !== undefined) {
     requestHeaders["Content-Type"] = "application/json";
     init.body = JSON.stringify(body);
