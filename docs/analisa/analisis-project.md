@@ -71,7 +71,7 @@ Pada database lama yang terhubung saat analisis awal:
   - `idx_products_active` vs `idx_products_is_active`
 - `npm run migrate:up` secara lokal langsung gagal karena `DATABASE_URL` tidak diset, sementara `.env` hanya berisi `DB_*`.
 
-**Update:** database lama sudah tidak dipakai. Database baru `fastshop-be` dibuat dari kondisi kosong dan seluruh migration berhasil dijalankan, sehingga `pgmigrations` sudah ada dan skema mengikuti file migration. Perbedaan `numeric(12,2)` tidak berlaku karena `numeric(12)` scale 0 adalah keputusan final.
+**Update:** database lama sudah tidak dipakai. Database baru `fastshop-be` dibuat dari kondisi kosong dan seluruh migration berhasil dijalankan, sehingga `pgmigrations` sudah ada dan skema mengikuti file migration. Perbedaan `numeric(12,2)` tidak berlaku karena `numeric(12)` scale 0 adalah keputusan final. Migration `1794119284866_add-integrity-constraints` kemudian menambahkan constraint dan index yang sebelumnya hilang, serta menyelaraskan timestamp `cart_items` menjadi `timestamptz`.
 
 **Dampak (pada DB lama):** instalasi baru dari migration tidak menghasilkan skema yang sama dengan DB lama. Jika `migrate:up` dijalankan pada DB lama, kemungkinan besar gagal karena `order_status` dan tabel-tabel sudah ada. Pipeline CI juga tidak bisa diandalkan. Kondisi ini sudah diperbaiki dengan database baru.
 
@@ -220,22 +220,23 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 | Objek | Migration | DB Baru (`fastshop-be`) | Catatan |
 |---|---|---|---|
-| `pgmigrations` | Ada | 4 migration tercatat | Teratasi |
+| `pgmigrations` | Ada | 5 migration tercatat | Teratasi |
 | `products.price` | `numeric(12)` scale 0 | `numeric(12)` scale 0 | Sesuai keputusan; tidak diubah |
 | `orders.total_amount` | `numeric(12)` scale 0 | `numeric(12)` scale 0 | Sesuai keputusan; tidak diubah |
 | `order_items.price_at_purchase` | `numeric(12)` scale 0 | `numeric(12)` scale 0 | Sesuai keputusan; tidak diubah |
 | `orders.payment_submitted_at` | `timestamptz` | `timestamptz` | Sesuai |
-| `cart_items.created_at/updated_at` | `NOT NULL` | `NOT NULL` | Sesuai |
+| `cart_items.created_at/updated_at` | `timestamptz` | `timestamptz` | Sesuai setelah migration integritas |
 | `cart_items.user_id/product_id` | `integer` | `integer` | Masih bisa ditingkatkan ke `bigint` |
-| `users.role` | VARCHAR tanpa CHECK | VARCHAR tanpa CHECK | Masih perlu constraint |
-| `products.is_active` | Nullable | Nullable | Sebaiknya `NOT NULL DEFAULT true` |
-| `orders.status` | Nullable | Nullable | Sebaiknya `NOT NULL` |
+| `users.role` | CHECK user/admin | CHECK user/admin | Teratasi |
+| `products.is_active` | `NOT NULL DEFAULT true` | `NOT NULL DEFAULT true` | Teratasi |
+| `orders.status` | `NOT NULL DEFAULT PENDING` | `NOT NULL DEFAULT PENDING` | Teratasi |
+| `orders(status, created_at)` | Index | Index `idx_orders_status_created` | Teratasi |
 
 ## 6. Rekomendasi Prioritas
 
 ### P0 — Segera
 
-1. **Baseline & perbaiki migrasi:** sinkronkan skema, buat `pgmigrations`, perbaiki timestamp, constraint, dan index duplikat. Pertahankan `numeric(12)` scale 0.
+1. **Baseline & perbaiki migrasi:** sinkronkan skema, buat `pgmigrations`, perbaiki timestamp, constraint, dan index duplikat. Pertahankan `numeric(12)` scale 0. *(Sebagian besar sudah dikerjakan melalui migration `1794119284866_add-integrity-constraints`.)*
 2. **Perbaiki webhook:** satu jalur transaksi untuk update status + stok, validasi nominal, state machine.
 3. **Update dependency:** Express, Multer, pg, Supabase; audit ulang.
 4. **Tambahkan test + CI:** auth, cart, checkout, webhook, migrasi dari DB kosong.
@@ -247,7 +248,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 - Perbaiki cart untuk produk nonaktif dan validasi add-to-cart.
 - Hardening upload (allowlist, magic bytes, cleanup).
 - Pisahkan `app.js` dan `server.js` untuk serverless.
-- Tambahkan constraint skema dan index yang hilang.
+- ~~Tambahkan constraint skema dan index yang hilang.~~ (sudah dikerjakan; sisa `bigint` dan unique `LOWER(email)`).
 - Samakan format numeric di response API.
 - Update README, tambahkan `.env.example` dan seed script.
 - Tambahkan `pool.on("error")`, graceful shutdown, `/health`.

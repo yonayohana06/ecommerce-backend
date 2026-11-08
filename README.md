@@ -315,6 +315,16 @@ npm run migrate:up
 npm run migrate:down
 ```
 
+> **Sebelum migrasi pada database berisi data:** buat backup terlebih dahulu, misalnya:
+> ```bash
+> docker exec pg-local pg_dump -U postgres -d fastshop-be > backup.sql
+> ```
+>
+> `npm run migrate:down` hanya membatalkan satu migration terakhir. Setelah itu jalankan `npm run migrate:up` untuk menerapkannya kembali. Uji skema database dengan:
+> ```bash
+> RUN_DB_TESTS=1 node --test tests/db/schema.test.js
+> ```
+
 ### 3.1 Membuat Admin Pertama
 Setelah migrasi berhasil, buat akun administrator pertama menggunakan nilai `ADMIN_NAME`, `ADMIN_EMAIL`, dan `ADMIN_PASSWORD` dari `.env`:
 

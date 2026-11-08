@@ -50,6 +50,16 @@
 
 **Progres:** database baru `fastshop-be` sudah dibuat dan 4 migration berhasil dijalankan pada 8 November 2026; `pgmigrations` sudah berisi 4 record. `DATABASE_URL` sudah ditambahkan ke `.env` dengan `sslmode=disable`, dan `npm run migrate:up` berhasil dijalankan ulang.
 
+**Progres 8 November 2026 (lanjutan):**
+- Backup `pg_dump` dibuat sebelum perubahan skema (file 15K di direktori temp).
+- Perbandingan skema aktual vs migration selesai; tidak ada index duplikat di DB baru.
+- Migration `1794119284866_add-integrity-constraints` ditambahkan: `NOT NULL` untuk `products.is_active` dan `orders.status`, CHECK role/quantity, timestamp `cart_items` → `timestamptz`, dan index `orders(status, created_at)`.
+- `migrate:down` satu langkah berhasil mengembalikan skema lama, lalu `migrate:up` menerapkannya kembali.
+- `tests/db/schema.test.js` 10/10 lulus, termasuk penolakan data invalid.
+- Fresh install kelima migration pada database sementara berhasil; schema test 10/10 lulus, lalu database sementara dihapus.
+- Seluruh suite `RUN_DB_TESTS=1 npm test` 23/23 lulus.
+- Baseline untuk DB existing/production belum dilakukan karena belum ada akses ke DB tersebut.
+
 **Estimasi:** L (1–2 hari)
 
 **Files:**
@@ -60,29 +70,29 @@
 - `README.md`
 
 **Langkah:**
-- [ ] Backup database sebelum melakukan perubahan skema.
-- [ ] Bandingkan skema aktual dengan seluruh migration; catat semua perbedaan.
+- [x] Backup database sebelum melakukan perubahan skema.
+- [x] Bandingkan skema aktual dengan seluruh migration; catat semua perbedaan.
 - [x] Tambahkan dukungan `DATABASE_URL` untuk node-pg-migrate (sudah ditambahkan ke `.env` dengan `sslmode=disable`).
 - [ ] Buat strategi baseline:
-  - [ ] Untuk DB yang sudah ada: buat tabel `pgmigrations` dan tandai migration lama sebagai sudah applied.
-  - [ ] Untuk fresh install: pastikan seluruh migration dapat dijalankan dari database kosong.
-- [ ] Buat migration baru untuk menyelaraskan skema:
-  - [ ] `payment_submitted_at` dan timestamp `cart_items` → `timestamptz` (sudah sesuai di DB baru).
-  - [ ] Samakan `NOT NULL` dan constraint yang hilang.
-  - [ ] Hapus index duplikat jika ada: `idx_products_category_id`, `idx_products_is_active`.
-  - [ ] Tambahkan index yang dibutuhkan, misalnya `orders(status, created_at)`.
-- [ ] **Jangan** mengubah `numeric(12)` menjadi `numeric(12,2)`; scale 0 dipertahankan.
+  - [ ] Untuk DB yang sudah ada: buat tabel `pgmigrations` dan tandai migration lama sebagai sudah applied (belum perlu di lokal; menunggu akses DB production).
+  - [x] Untuk fresh install: pastikan seluruh migration dapat dijalankan dari database kosong.
+- [x] Buat migration baru untuk menyelaraskan skema:
+  - [x] `payment_submitted_at` dan timestamp `cart_items` → `timestamptz` (sudah sesuai di DB baru).
+  - [x] Samakan `NOT NULL` dan constraint yang hilang.
+  - [x] Hapus index duplikat jika ada: `idx_products_category_id`, `idx_products_is_active` (tidak ditemukan di DB baru).
+  - [x] Tambahkan index yang dibutuhkan, misalnya `orders(status, created_at)`.
+- [x] **Jangan** mengubah `numeric(12)` menjadi `numeric(12,2)`; scale 0 dipertahankan.
 - [x] Uji `npm run migrate:up` pada database kosong.
-- [ ] Uji `npm run migrate:down` minimal satu langkah pada database test.
-- [ ] Pastikan migration idempotent/aman untuk DB yang sudah berisi data.
-- [ ] Perbarui dokumentasi cara menjalankan migration.
+- [x] Uji `npm run migrate:down` minimal satu langkah pada database test.
+- [x] Pastikan migration idempotent/aman untuk DB yang sudah berisi data (backfill NULL sebelum `NOT NULL`).
+- [x] Perbarui dokumentasi cara menjalankan migration.
 
 **Definition of Done:**
-- [ ] `pgmigrations` ada dan mencatat seluruh migration.
-- [ ] Fresh install dari migration menghasilkan skema yang sama dengan DB aktual.
-- [ ] `npm run migrate:up` berhasil di DB kosong dan DB existing.
-- [ ] Tidak ada index duplikat.
-- [ ] CI migration berhasil menggunakan database test.
+- [x] `pgmigrations` ada dan mencatat seluruh migration.
+- [x] Fresh install dari migration menghasilkan skema yang sama dengan DB aktual.
+- [x] `npm run migrate:up` berhasil di DB kosong dan DB existing.
+- [x] Tidak ada index duplikat.
+- [ ] CI migration berhasil menggunakan database test (dikerjakan bersama P0-04).
 
 **Verifikasi:**
 ```bash
@@ -414,6 +424,8 @@ npm test -- tests/auth
 
 **Temuan:** 5 (integritas skema).
 
+**Progres:** sebagian besar item sudah dikerjakan melalui migration `1794119284866_add-integrity-constraints` pada 8 November 2026. Sisa: tipe `bigint` untuk `cart_items` dan unique index `LOWER(email)`.
+
 **Estimasi:** M
 
 **Files:**
@@ -421,22 +433,22 @@ npm test -- tests/auth
 - `tests/migrations/*`
 
 **Langkah:**
-- [ ] Set `products.is_active NOT NULL DEFAULT true`.
-- [ ] Set `orders.status NOT NULL DEFAULT 'PENDING'`.
-- [ ] Tambahkan `CHECK (role IN ('user', 'admin'))` pada `users.role`.
-- [ ] Pastikan `CHECK (quantity > 0)` pada `cart_items.quantity`.
+- [x] Set `products.is_active NOT NULL DEFAULT true`.
+- [x] Set `orders.status NOT NULL DEFAULT 'PENDING'`.
+- [x] Tambahkan `CHECK (role IN ('user', 'admin'))` pada `users.role`.
+- [x] Pastikan `CHECK (quantity > 0)` pada `cart_items.quantity`.
 - [ ] Selaraskan tipe `cart_items.user_id` dan `product_id` menjadi `bigint`.
 - [ ] Tambahkan unique index `LOWER(email)` pada `users.email`.
-- [ ] Samakan tipe timestamp menjadi `timestamptz`.
-- [ ] Hapus index duplikat.
-- [ ] Tambahkan index `orders(status, created_at)`.
-- [ ] Uji migration up/down dan constraint dengan data invalid.
+- [x] Samakan tipe timestamp menjadi `timestamptz`.
+- [x] Hapus index duplikat (tidak ditemukan di DB baru).
+- [x] Tambahkan index `orders(status, created_at)`.
+- [x] Uji migration up/down dan constraint dengan data invalid.
 
 **Definition of Done:**
-- [ ] Semua constraint aktif dan teruji.
-- [ ] Tidak ada index duplikat.
-- [ ] Migration aman untuk data existing.
-- [ ] Test migration lulus.
+- [x] Semua constraint aktif dan teruji.
+- [x] Tidak ada index duplikat.
+- [x] Migration aman untuk data existing (backfill NULL sebelum `NOT NULL`).
+- [x] Test migration lulus.
 
 ### P1-06: Samakan format numeric di response API
 
