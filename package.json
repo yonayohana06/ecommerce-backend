@@ -4,12 +4,14 @@
   "description": "",
   "main": "src/app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
     "migrate:create": "node-pg-migrate create",
     "migrate:up": "node-pg-migrate up",
-    "migrate:down": "node-pg-migrate down"
+    "migrate:down": "node-pg-migrate down",
+    "seed:admin": "node scripts/seed-admin.js",
+    "create:admin": "node scripts/create-admin.js"
   },
   "keywords": [],
   "author": "",

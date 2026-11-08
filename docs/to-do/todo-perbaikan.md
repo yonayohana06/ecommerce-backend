@@ -3,12 +3,14 @@
 > **Untuk pelaksana:** kerjakan berurutan dari P0. Setiap task harus selesai dengan test/verifikasi sebelum lanjut. Gunakan checklist `- [ ]` untuk tracking.
 >
 > **Sumber temuan:** [`docs/analisa/analisis-project.md`](../analisa/analisis-project.md)
+>
+> **Keputusan tipe harga:** gunakan `numeric(12)` (scale 0). Jangan membuat migration ke `numeric(12,2)`.
 
 **Goal:** Menutup temuan analisis secara berurutan sehingga backend layak untuk production.
 
 **Architecture:** Tetap menggunakan layered architecture (Route → Middleware → Controller → Service → DB). Perbaikan difokuskan pada migrasi, konsistensi stok, validasi/error handling, keamanan, dan test otomatis.
 
-**Tech Stack:** Node.js 24, Express 5, PostgreSQL 17, Supabase Storage, JWT, node-pg-migrate.
+**Tech Stack:** Node.js 24, Express 5, PostgreSQL 18, Supabase Storage, JWT, node-pg-migrate.
 
 ## Global Constraints
 
@@ -17,12 +19,13 @@
 - Setiap bug fix wajib disertai regression test.
 - Jangan commit secret; gunakan `.env` lokal dan environment variables di deployment.
 - Pertahankan Node.js 24 dan Express 5.
+- Tipe harga/total menggunakan `numeric(12)` scale 0; jangan ubah ke `numeric(12,2)`.
 - Gunakan format error JSON yang konsisten: `{ code, message }`.
 - Perubahan status pesanan harus selalu melalui satu service transaksional.
 
 ## Review Focus
 
-- Presisi harga/total untuk nilai desimal dan transaksi besar.
+- Konsistensi tipe `numeric(12)` scale 0 untuk harga/total dan transaksi besar.
 - Konsistensi stok saat checkout, pembatalan, dan webhook bersamaan.
 - Validasi input kosong, tipe salah, ID tidak valid, dan JSON rusak.
 - Batas keamanan token user vs admin.
@@ -45,6 +48,8 @@
 
 **Temuan:** 4.1.1 dan 5 (migrasi tidak sinkron, `pgmigrations` tidak ada, index duplikat).
 
+**Progres:** database baru `fastshop-be` sudah dibuat dan 4 migration berhasil dijalankan pada 8 November 2026; `pgmigrations` sudah berisi 4 record. `DATABASE_URL` sudah ditambahkan ke `.env` dengan `sslmode=disable`, dan `npm run migrate:up` berhasil dijalankan ulang.
+
 **Estimasi:** L (1–2 hari)
 
 **Files:**
@@ -57,17 +62,17 @@
 **Langkah:**
 - [ ] Backup database sebelum melakukan perubahan skema.
 - [ ] Bandingkan skema aktual dengan seluruh migration; catat semua perbedaan.
-- [ ] Tambahkan dukungan `DATABASE_URL` untuk node-pg-migrate (isi `.env`, atau buat script wrapper yang menyusun URL dari `DB_*`).
+- [x] Tambahkan dukungan `DATABASE_URL` untuk node-pg-migrate (sudah ditambahkan ke `.env` dengan `sslmode=disable`).
 - [ ] Buat strategi baseline:
   - [ ] Untuk DB yang sudah ada: buat tabel `pgmigrations` dan tandai migration lama sebagai sudah applied.
   - [ ] Untuk fresh install: pastikan seluruh migration dapat dijalankan dari database kosong.
 - [ ] Buat migration baru untuk menyelaraskan skema:
-  - [ ] `numeric(12)` → `numeric(12,2)` pada `products.price`, `orders.total_amount`, `order_items.price_at_purchase`.
-  - [ ] `payment_submitted_at` dan timestamp `cart_items` → `timestamptz`.
+  - [ ] `payment_submitted_at` dan timestamp `cart_items` → `timestamptz` (sudah sesuai di DB baru).
   - [ ] Samakan `NOT NULL` dan constraint yang hilang.
-  - [ ] Hapus index duplikat: `idx_products_category_id`, `idx_products_is_active`.
+  - [ ] Hapus index duplikat jika ada: `idx_products_category_id`, `idx_products_is_active`.
   - [ ] Tambahkan index yang dibutuhkan, misalnya `orders(status, created_at)`.
-- [ ] Uji `npm run migrate:up` pada database kosong.
+- [ ] **Jangan** mengubah `numeric(12)` menjadi `numeric(12,2)`; scale 0 dipertahankan.
+- [x] Uji `npm run migrate:up` pada database kosong.
 - [ ] Uji `npm run migrate:down` minimal satu langkah pada database test.
 - [ ] Pastikan migration idempotent/aman untuk DB yang sudah berisi data.
 - [ ] Perbarui dokumentasi cara menjalankan migration.
@@ -452,7 +457,7 @@ npm test -- tests/auth
 - [ ] Tentukan kontrak: semua harga, subtotal, dan total dikembalikan sebagai number.
 - [ ] Buat serializer `toNumber` yang aman untuk numeric PostgreSQL.
 - [ ] Terapkan pada product list/detail, cart, checkout, order list/detail, dan admin order.
-- [ ] Pastikan tidak ada kehilangan presisi untuk nilai Rupiah.
+- [ ] Pastikan konversi aman untuk nilai Rupiah bulat (`numeric(12)` scale 0).
 - [ ] Tambahkan test tipe data response.
 - [ ] Perbarui dokumentasi API.
 
@@ -477,12 +482,12 @@ npm test -- tests/auth
 - [ ] Perbaiki base URL menjadi `3001`.
 - [ ] Samakan masa berlaku JWT dengan `.env` (`1d` user, `8h` admin).
 - [ ] Perjelas signature payment gateway: SHA-512 hash, bukan HMAC (atau perbaiki implementasi jika memang HMAC).
-- [ ] Perbaiki dokumentasi tipe `NUMERIC(12,2)`.
+- [ ] Pastikan dokumentasi menyebut `NUMERIC(12)` (scale 0) sesuai keputusan.
 - [ ] Dokumentasikan `DATABASE_URL` untuk migration.
 - [ ] Buat `.env.example` lengkap tanpa secret.
-- [ ] Buat seed admin dengan `ADMIN_EMAIL`/`ADMIN_PASSWORD`; tolak password default/lemah.
-- [ ] Tambahkan script `npm run seed:admin`.
-- [ ] Dokumentasikan cara membuat admin pertama.
+- [x] Buat seed admin dengan `ADMIN_EMAIL`/`ADMIN_PASSWORD`; tolak password default/lemah.
+- [x] Tambahkan script `npm run seed:admin`.
+- [x] Dokumentasikan cara membuat admin pertama.
 
 **Definition of Done:**
 - [ ] Developer baru dapat setup project hanya dari README + `.env.example`.

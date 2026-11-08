@@ -5,6 +5,8 @@
 > Lingkup: seluruh source code (`src`), migration, konfigurasi deployment, dependency, koneksi database, dan smoke test endpoint read-only.
 >
 > Status: tidak ada file source code yang diubah dalam proses analisis ini.
+>
+> **Update 8 November 2026:** database lokal sudah diganti dengan database kosong `fastshop-be` dan seluruh migration berhasil dijalankan. Perbedaan tipe `numeric` pada database lama tidak lagi relevan. Tipe `numeric(12)` (scale 0) adalah keputusan final; **tidak akan dibuat migration ke `numeric(12,2)`**.
 
 ## 1. Ringkasan
 
@@ -35,7 +37,7 @@ Hasil verifikasi utama:
 - Koneksi PostgreSQL berhasil.
 - Supabase RPC `version` berhasil.
 - `npm audit` menemukan 8 kerentanan pada dependency produksi.
-- Skema database aktual tidak sepenuhnya sama dengan file migration.
+- Skema database lama tidak sepenuhnya sama dengan file migration; database baru `fastshop-be` sudah dibuat dari migration.
 
 ## 3. Yang Sudah Baik
 
@@ -56,11 +58,11 @@ Hasil verifikasi utama:
 
 #### 1. Migrasi database tidak sinkron dengan DB aktual
 
-Ini temuan paling serius. Pada database yang terhubung dari `.env`:
+Pada database lama yang terhubung saat analisis awal:
 
 - Tabel `pgmigrations` **tidak ada**, artinya riwayat migrasi node-pg-migrate tidak tercatat.
 - Skema aktual berbeda dari file migration:
-  - `products.price`, `orders.total_amount`, dan `order_items.price_at_purchase`: migration membuat `numeric(12)` (scale 0), DB aktual `numeric(12,2)`.
+  - `products.price`, `orders.total_amount`, dan `order_items.price_at_purchase`: migration membuat `numeric(12)` (scale 0), DB lama memakai `numeric(12,2)`.
   - `orders.payment_submitted_at`: migration `timestamptz`, aktual `timestamp without time zone`.
   - `cart_items.created_at/updated_at`: migration `NOT NULL`, aktual nullable.
   - Ada constraint/index tambahan yang tidak ada di migration, misalnya `cart_items_quantity_check`.
@@ -69,7 +71,9 @@ Ini temuan paling serius. Pada database yang terhubung dari `.env`:
   - `idx_products_active` vs `idx_products_is_active`
 - `npm run migrate:up` secara lokal langsung gagal karena `DATABASE_URL` tidak diset, sementara `.env` hanya berisi `DB_*`.
 
-**Dampak:** instalasi baru dari migration tidak akan menghasilkan skema yang sama dengan DB saat ini. Jika `migrate:up` dijalankan pada DB ini, kemungkinan besar gagal karena `order_status` dan tabel-tabel sudah ada. Pipeline CI juga tidak bisa diandalkan.
+**Update:** database lama sudah tidak dipakai. Database baru `fastshop-be` dibuat dari kondisi kosong dan seluruh migration berhasil dijalankan, sehingga `pgmigrations` sudah ada dan skema mengikuti file migration. Perbedaan `numeric(12,2)` tidak berlaku karena `numeric(12)` scale 0 adalah keputusan final.
+
+**Dampak (pada DB lama):** instalasi baru dari migration tidak menghasilkan skema yang sama dengan DB lama. Jika `migrate:up` dijalankan pada DB lama, kemungkinan besar gagal karena `order_status` dan tabel-tabel sudah ada. Pipeline CI juga tidak bisa diandalkan. Kondisi ini sudah diperbaiki dengan database baru.
 
 **Rekomendasi:** lakukan baseline migration, buat `pgmigrations` yang menandai migration lama sebagai applied, atau dump skema aktual menjadi baseline baru. Jangan mengedit migration yang sudah pernah dijalankan. Setelah itu, uji `migrate:up` dari database kosong.
 
@@ -203,8 +207,8 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
   - README memakai base URL `3000`, kode default `3001`.
   - README menyebut JWT user 7 hari, `.env` memakai `1d`.
   - README menyebut HMAC SHA-512, implementasi memakai SHA-512 hash (gaya Midtrans).
-  - README menulis `NUMERIC(12)`, DB aktual `NUMERIC(12,2)`.
-- **Tidak ada seed script/admin creation:** onboarding butuh manipulasi DB manual.
+  - README menulis `NUMERIC(12)`, DB lama memakai `NUMERIC(12,2)`; DB baru mengikuti migration `NUMERIC(12)` dan scale 0 dipertahankan.
+- **Seed admin:** sudah ditambahkan script `npm run seed:admin` pada 8 November 2026; admin pertama (`admin@fastshop.id`) sudah dibuat.
 - **Tidak ada `.env.example`:** menyulitkan setup.
 - **Dead code:** `verifyAuthToken` dan `authorize` tidak dipakai; ada import tidak terpakai di `productService.js`.
 - **Duplikasi:** controller/service produk & kategori publik vs admin hampir sama; pagination logic berulang.
@@ -214,16 +218,16 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 ## 5. Skema Aktual vs Migration
 
-| Objek | Migration | DB Aktual | Dampak |
+| Objek | Migration | DB Baru (`fastshop-be`) | Catatan |
 |---|---|---|---|
-| `pgmigrations` | Seharusnya ada | Tidak ada | Migrasi tidak terlacak |
-| `products.price` | `numeric(12)` scale 0 | `numeric(12,2)` | Harga desimal bisa hilang di fresh install |
-| `orders.total_amount` | `numeric(12)` scale 0 | `numeric(12,2)` | Total transaksi bisa dibulatkan |
-| `order_items.price_at_purchase` | `numeric(12)` scale 0 | `numeric(12,2)` | Snapshot harga bisa dibulatkan |
-| `orders.payment_submitted_at` | `timestamptz` | `timestamp` | Perbedaan timezone |
-| `cart_items.created_at/updated_at` | `NOT NULL` | Nullable | Inkonsistensi data |
-| `cart_items.user_id/product_id` | `integer` | `integer` | Tidak konsisten dengan `bigint` di tabel lain |
-| `users.role` | VARCHAR tanpa CHECK | VARCHAR tanpa CHECK | Nilai role arbitrer bisa masuk |
+| `pgmigrations` | Ada | 4 migration tercatat | Teratasi |
+| `products.price` | `numeric(12)` scale 0 | `numeric(12)` scale 0 | Sesuai keputusan; tidak diubah |
+| `orders.total_amount` | `numeric(12)` scale 0 | `numeric(12)` scale 0 | Sesuai keputusan; tidak diubah |
+| `order_items.price_at_purchase` | `numeric(12)` scale 0 | `numeric(12)` scale 0 | Sesuai keputusan; tidak diubah |
+| `orders.payment_submitted_at` | `timestamptz` | `timestamptz` | Sesuai |
+| `cart_items.created_at/updated_at` | `NOT NULL` | `NOT NULL` | Sesuai |
+| `cart_items.user_id/product_id` | `integer` | `integer` | Masih bisa ditingkatkan ke `bigint` |
+| `users.role` | VARCHAR tanpa CHECK | VARCHAR tanpa CHECK | Masih perlu constraint |
 | `products.is_active` | Nullable | Nullable | Sebaiknya `NOT NULL DEFAULT true` |
 | `orders.status` | Nullable | Nullable | Sebaiknya `NOT NULL` |
 
@@ -231,7 +235,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 ### P0 — Segera
 
-1. **Baseline & perbaiki migrasi:** sinkronkan skema, buat `pgmigrations`, perbaiki `numeric(12,2)`, timestamp, constraint, dan index duplikat.
+1. **Baseline & perbaiki migrasi:** sinkronkan skema, buat `pgmigrations`, perbaiki timestamp, constraint, dan index duplikat. Pertahankan `numeric(12)` scale 0.
 2. **Perbaiki webhook:** satu jalur transaksi untuk update status + stok, validasi nominal, state machine.
 3. **Update dependency:** Express, Multer, pg, Supabase; audit ulang.
 4. **Tambahkan test + CI:** auth, cart, checkout, webhook, migrasi dari DB kosong.

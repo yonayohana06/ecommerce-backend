@@ -267,7 +267,7 @@ npm install
 Buat file `.env` di root project dengan referensi variabel berikut:
 
 ```env
-PORT=3000
+PORT=3001
 NODE_ENV=development
 
 # Database PostgreSQL Lokal
@@ -277,16 +277,22 @@ DB_USER=postgres
 DB_PASSWORD=your_password
 DB_NAME=ecommerce_db
 
-# Atau gunakan Database URL (opsional, jika menggunakan Supabase / Cloud Database)
-# DATABASE_URL=postgres://postgres:password@db.xxxx.supabase.co:5432/postgres
+# Wajib untuk node-pg-migrate (npm run migrate:*)
+# Gunakan ?sslmode=disable untuk PostgreSQL lokal tanpa SSL.
+DATABASE_URL=postgresql://postgres:password@localhost:5432/ecommerce_db?sslmode=disable
 
 # JWT & Security (Customer Portal)
 JWT_SECRET=your_jwt_secret_key
-JWT_EXPIRES_IN=7d
+JWT_EXPIRES_IN=1d
 
 # JWT & Security (Admin Portal)
 ADMIN_JWT_SECRET=your_admin_jwt_secret_key
 ADMIN_JWT_EXPIRES_IN=8h
+
+# Admin seed (npm run seed:admin)
+ADMIN_NAME=Administrator
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=change_this_password
 
 # Payment Gateway
 PAYMENT_SERVER_KEY=your_payment_server_key
@@ -308,6 +314,48 @@ npm run migrate:up
 # Membatalkan migrasi terakhir
 npm run migrate:down
 ```
+
+### 3.1 Membuat Admin Pertama
+Setelah migrasi berhasil, buat akun administrator pertama menggunakan nilai `ADMIN_NAME`, `ADMIN_EMAIL`, dan `ADMIN_PASSWORD` dari `.env`:
+
+```bash
+npm run seed:admin
+```
+
+Untuk memperbarui password/name admin yang sudah ada:
+
+```bash
+npm run seed:admin -- --update
+```
+
+> **Catatan:** `ADMIN_PASSWORD` disimpan di `.env` dan tidak boleh di-commit. Segera ganti password default setelah login pertama.
+
+### 3.2 Membuat Admin Tambahan
+Untuk membuat admin baru tanpa mengubah `.env`, gunakan `create:admin`:
+
+```bash
+npm run create:admin -- --email admin2@fastshop.id --name "Admin Kedua"
+```
+
+Password akan diminta secara interaktif dan tidak ditampilkan di layar (tidak tercatat di shell history). Opsi lain:
+
+```bash
+# Dengan nomor telepon
+npm run create:admin -- --email admin2@fastshop.id --name "Admin Kedua" --phone 08123456789
+
+# Password dari stdin (cocok untuk script/CI)
+printf '%s' 'password-kuat' | npm run create:admin -- --email admin2@fastshop.id --name "Admin Kedua" --password-stdin
+
+# Perbarui nama/password jika email sudah terdaftar sebagai admin
+npm run create:admin -- --email admin2@fastshop.id --name "Admin Kedua" --update
+```
+
+Perilaku:
+
+- Email yang sudah terdaftar sebagai **admin** tidak akan diduplikasi; tanpa `--update` command hanya menampilkan status.
+- Email yang sudah dipakai akun **non-admin** akan ditolak.
+- Password minimal 8 karakter dan maksimal 72 byte (batas bcrypt).
+- `create:admin` tidak mengubah isi `.env`.
 
 ### 4. Jalankan Server
 * **Mode Development (dengan Nodemon auto-reload):**
