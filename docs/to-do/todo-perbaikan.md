@@ -569,29 +569,46 @@ Hasil: 8/8 test serializer dan 8/8 test integrasi numeric lulus. `npm test` 61 p
 
 **Temuan:** 4.3 (dokumentasi tidak akurat, tidak ada seed/.env.example).
 
+**Progres 8 November 2026:** selesai. README memakai base URL `3001`, JWT user `1d` dan admin `8h`, signature dijelaskan sebagai SHA-512 hash (bukan HMAC), serta `NUMERIC(12)` scale 0 ditegaskan. `.env.example` baru mencakup seluruh variabel yang dipakai kode. `DATABASE_URL` didokumentasikan sebagai sumber konfigurasi migrasi. Seed admin dan `create:admin` sudah tersedia; dokumentasi admin pertama dipertahankan.
+
 **Estimasi:** S–M
 
 **Files:**
 - `README.md`
 - `.env.example` (baru)
-- `scripts/seed-admin.js` (baru)
+- `scripts/seed-admin.js`
 - `package.json`
+- `src/config/supabase.js`
+- `src/services/authService.js`
+- `tests/config/env-example.test.js`
 
 **Langkah:**
-- [ ] Perbaiki base URL menjadi `3001`.
-- [ ] Samakan masa berlaku JWT dengan `.env` (`1d` user, `8h` admin).
-- [ ] Perjelas signature payment gateway: SHA-512 hash, bukan HMAC (atau perbaiki implementasi jika memang HMAC).
-- [ ] Pastikan dokumentasi menyebut `NUMERIC(12)` (scale 0) sesuai keputusan.
-- [ ] Dokumentasikan `DATABASE_URL` untuk migration.
-- [ ] Buat `.env.example` lengkap tanpa secret.
+- [x] Perbaiki base URL menjadi `3001`.
+- [x] Samakan masa berlaku JWT dengan `.env` (`1d` user, `8h` admin).
+- [x] Perjelas signature payment gateway: SHA-512 hash, bukan HMAC (atau perbaiki implementasi jika memang HMAC).
+- [x] Pastikan dokumentasi menyebut `NUMERIC(12)` (scale 0) sesuai keputusan.
+- [x] Dokumentasikan `DATABASE_URL` untuk migration.
+- [x] Buat `.env.example` lengkap tanpa secret.
 - [x] Buat seed admin dengan `ADMIN_EMAIL`/`ADMIN_PASSWORD`; tolak password default/lemah.
 - [x] Tambahkan script `npm run seed:admin`.
 - [x] Dokumentasikan cara membuat admin pertama.
 
 **Definition of Done:**
-- [ ] Developer baru dapat setup project hanya dari README + `.env.example`.
-- [ ] Seed admin berhasil membuat akun admin.
-- [ ] Semua nilai dokumentasi sesuai kode.
+- [x] Developer baru dapat setup project hanya dari README + `.env.example`.
+- [x] Seed admin berhasil membuat akun admin.
+- [x] Semua nilai dokumentasi sesuai kode.
+
+**Verifikasi:**
+```bash
+node --require ./tests/setup.js --test tests/config/env-example.test.js
+npm test
+npm run test:db
+npm run test:coverage
+npm run lint
+npm audit --omit=dev
+```
+
+Hasil: 4/4 test `.env.example` lulus. `npm test` 65 pass + 124 skip (189 total), `npm run test:db` 189/189 lulus, coverage 86,57% lines / 76,92% branches / 91,62% functions, `npm run lint` OK untuk 82 file, `npm audit --omit=dev` 0 vulnerabilities, `git diff --check` bersih.
 
 ### P1-08: Tambahkan observability dasar
 

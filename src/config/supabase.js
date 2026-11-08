@@ -6,7 +6,7 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   throw new Error(
-    "SUPABASE_URL dan SUPABASE_PUBLISHABLE_KEY wajib ada di .env",
+    "SUPABASE_URL dan SUPABASE_SERVICE_ROLE_KEY wajib ada di .env",
   );
 }
 

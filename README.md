@@ -10,6 +10,7 @@ Aplikasi ini menggunakan pola **Layered Architecture** (Route ➔ Middleware ➔
 
 ```text
 ECOMMERCE-BACKEND/
+├── .env.example                      # Template variabel environment tanpa secret
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml                # CI/CD: Otomatisasi migrasi database ke Supabase/Production
@@ -37,7 +38,7 @@ ECOMMERCE-BACKEND/
 │   ├── middlewares/
 │   │   ├── authMiddleware.js         # Token verification (verifyUserToken, verifyAdminToken, verifyAuthToken, RBAC)
 │   │   ├── uploadMiddleware.js       # Konfigurasi Multer memory storage (gambar, maks 2MB)
-│   │   └── verifySignature.js        # Verifikasi HMAC SHA-512 signature payment gateway
+│   │   └── verifySignature.js        # Verifikasi SHA-512 hash signature payment gateway
 │   ├── routes/
 │   │   ├── adminAuthRoutes.js        # Endpoint auth admin (/api/admin/auth)
 │   │   ├── adminCategoryRoutes.js    # Endpoint admin kategori (/api/admin/categories)
@@ -75,7 +76,7 @@ Sistem memisahkan secara ketat alur autentikasi dan otorisasi antara **Pelanggan
 * **Portal Pelanggan (`/api/auth`)**:
   * Pendaftaran publik (`/register`) otomatis menetapkan `role: 'user'`.
   * Login pelanggan (`/login`) menolak akun dengan `role: 'admin'` (`403 Forbidden`) agar admin tidak dapat login di portal belanja pelanggan.
-  * Token ditandatangani dengan `JWT_SECRET` (default durasi: **7 hari**).
+  * Token ditandatangani dengan `JWT_SECRET` (default durasi: **1 hari**).
   * Proteksi endpoint pelanggan menggunakan middleware `verifyUserToken`.
 * **Portal Administrator (`/api/admin/auth`)**:
   * **Tidak memiliki endpoint registrasi publik**. Akun admin dibuat secara internal (seeder/CLI/database).
@@ -90,7 +91,7 @@ Sistem memisahkan secara ketat alur autentikasi dan otorisasi antara **Pelanggan
 
 ### 2. Payment Gateway Webhook Security
 * Endpoint webhook pembayaran terpisah dari sistem autentikasi user.
-* Keamanan request webhook diproteksi oleh `verifySignature.js` menggunakan algoritma **HMAC SHA-512** dengan memadukan `order_id`, `status_code`, `gross_amount`, dan `PAYMENT_SERVER_KEY`.
+* Keamanan request webhook diproteksi oleh `verifySignature.js` menggunakan **SHA-512 hash** dari gabungan `order_id`, `status_code`, `gross_amount`, dan `PAYMENT_SERVER_KEY` (bukan HMAC keyed). Signature dikirim sebagai `signature_key` dan dibandingkan dengan hasil kalkulasi lokal.
 
 ### 3. Keamanan File Bukti Pembayaran (Private Storage)
 * Bukti transfer disimpan di bucket privat Supabase (`payment-proofs`).
@@ -144,11 +145,11 @@ Sistem memisahkan secara ketat alur autentikasi dan otorisasi antara **Pelanggan
 | Column | Type | Constraints | Deskripsi |
 | :--- | :--- | :--- | :--- |
 | `id` | SERIAL | PRIMARY KEY | ID item keranjang |
-| `user_id` | INT | FOREIGN KEY (`users.id`), ON DELETE CASCADE | Pemilik keranjang |
-| `product_id` | INT | FOREIGN KEY (`products.id`), ON DELETE CASCADE | Produk yang dimasukkan |
+| `user_id` | BIGINT | FOREIGN KEY (`users.id`), ON DELETE CASCADE | Pemilik keranjang |
+| `product_id` | BIGINT | FOREIGN KEY (`products.id`), ON DELETE CASCADE | Produk yang dimasukkan |
 | `quantity` | INT | NOT NULL, DEFAULT 1 | Jumlah kuantitas produk |
-| `created_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Waktu item ditambahkan |
-| `updated_at` | TIMESTAMP | DEFAULT CURRENT_TIMESTAMP | Waktu item diubah |
+| `created_at` | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP | Waktu item ditambahkan |
+| `updated_at` | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP | Waktu item diubah |
 * *Constraint Unik:* `UNIQUE (user_id, product_id)` untuk mendukung operasi Upsert.
 
 ### 5. `orders`
@@ -175,17 +176,19 @@ Sistem memisahkan secara ketat alur autentikasi dan otorisasi antara **Pelanggan
 | `price_at_purchase` | NUMERIC(12) | NOT NULL, CHECK (price_at_purchase >= 0) | Snapshot harga saat transaksi |
 | `created_at` | TIMESTAMPTZ | DEFAULT CURRENT_TIMESTAMP | Waktu pencatatan item |
 
+> **Keputusan tipe harga:** `products.price`, `orders.total_amount`, dan `order_items.price_at_purchase` memakai `NUMERIC(12)` dengan **scale 0** (nilai Rupiah bulat, tanpa desimal). API tetap mengembalikannya sebagai JSON `number`.
+
 ---
 
 ## 🚀 Endpoint API Utama
 
-Base URL: `http://localhost:3000/api`
+Base URL: `http://localhost:3001/api`
 
 ### 🔐 1. Autentikasi Pengguna — `/api/auth`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
-| `POST` | `/api/auth/register` | Publik | Mendaftarkan akun pelanggan baru (nama, email unik, password min. 6 karakter). |
-| `POST` | `/api/auth/login` | Publik | Login pelanggan (menolak akun admin), mengembalikan JWT User token (7 hari) dan profil. |
+| `POST` | `/api/auth/register` | Publik | Mendaftarkan akun pelanggan baru (nama, email unik, password minimal 8 karakter serta mengandung huruf dan angka). |
+| `POST` | `/api/auth/login` | Publik | Login pelanggan (menolak akun admin), mengembalikan JWT User token (default 1 hari) dan profil. |
 | `GET` | `/api/auth/me` | User | Mengambil data profil pelanggan yang sedang login. |
 
 ### 🛠️ 2. Autentikasi Administrator — `/api/admin/auth`
@@ -241,7 +244,7 @@ Base URL: `http://localhost:3000/api`
 | `GET` | `/ready` | Publik | Readiness check; menjalankan `SELECT 1` dan mengembalikan `503` jika database belum siap. |
 | `GET` | `/200` | Publik | Alias lama `/health` untuk kompatibilitas monitoring. |
 
-### 📋 8. Pesanan Pengguna — `/api/orders`
+### 📋 9. Pesanan Pengguna — `/api/orders`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `POST` | `/api/orders/checkout` | User | Melakukan checkout pesanan dari keranjang belanja (transaksi database ACID, *row locking*, potong stok produk, dan kosongkan keranjang). |
@@ -249,7 +252,7 @@ Base URL: `http://localhost:3000/api`
 | `GET` | `/api/orders/:id` | User | Mengambil detail lengkap spesifik pesanan milik user (hanya pesanan milik user sendiri) beserta rincian item produk yang dibeli. |
 | `POST` | `/api/orders/:orderId/pay` | User | Mengunggah file bukti transfer (`multipart/form-data`, field: `proof_image`; hanya JPEG/PNG/WebP valid maksimal 2MB, diverifikasi magic bytes). File disimpan ke Supabase Storage dan status diubah ke `PROCESSING`. |
 
-### 📊 9. Manajemen Pesanan & Dashboard (Admin) — `/api/admin/orders`
+### 📊 10. Manajemen Pesanan & Dashboard (Admin) — `/api/admin/orders`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `GET` | `/api/admin/orders/summary` | Admin | Mengambil ringkasan statistik pesanan (total pesanan, total omset dari status valid, dan perincian order per status). |
@@ -257,10 +260,10 @@ Base URL: `http://localhost:3000/api`
 | `GET` | `/api/admin/orders/:orderId` | Admin | Mengambil detail lengkap pesanan spesifik, data customer, item produk, dan signed URL bukti transfer. |
 | `PATCH` | `/api/admin/orders/:orderId/status` | Admin | Mengubah status pesanan sesuai transisi yang valid. Mengembalikan stok otomatis jika dibatalkan, atau memotong stok kembali jika pesanan batal diaktifkan kembali. |
 
-### 💳 10. Webhook Payment Gateway — `/api/orders/webhook/payment`
+### 💳 11. Webhook Payment Gateway — `/api/orders/webhook/payment`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
-| `POST` | `/api/orders/webhook/payment` | Webhook | Menerima callback notifikasi status pembayaran dari Payment Gateway. Request divalidasi dengan signature HMAC SHA-512; `gross_amount` harus sama dengan `total_amount` pesanan. |
+| `POST` | `/api/orders/webhook/payment` | Webhook | Menerima callback notifikasi status pembayaran dari Payment Gateway. Request divalidasi dengan SHA-512 hash signature; `gross_amount` harus sama dengan `total_amount` pesanan. |
 
 > **Sinkronisasi status & stok:** admin, webhook, dan upload bukti bayar memakai service transaksional yang sama (`orderStatusService`). Webhook duplikat bersifat idempotent (stok tidak berubah dua kali), dan `transaction_status` yang tidak dikenal ditolak dengan HTTP 400.
 
@@ -276,11 +279,15 @@ npm install
 ```
 
 ### 2. Setup Environment Variables
-Buat file `.env` di root project dengan referensi variabel berikut:
+Salin template yang tersedia, lalu isi nilainya:
+```bash
+cp .env.example .env
+```
+
+Referensi variabel:
 
 ```env
 PORT=3001
-NODE_ENV=development
 
 # Database PostgreSQL Lokal
 DB_HOST=localhost
@@ -311,22 +318,32 @@ ADMIN_JWT_EXPIRES_IN=8h
 ADMIN_NAME=Administrator
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=change_this_password
+ADMIN_PHONE_NUMBER=
 
 # Payment Gateway
 PAYMENT_SERVER_KEY=your_payment_server_key
 
 # Supabase Storage Configuration (Bukti Transfer)
 SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_PUBLISHABLE_KEY=your_supabase_publishable_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+
+# Rate limit (opsional; nilai di bawah adalah default)
+RATE_LIMIT_LOGIN_WINDOW_MS=900000
+RATE_LIMIT_LOGIN_MAX=10
+RATE_LIMIT_REGISTER_WINDOW_MS=3600000
+RATE_LIMIT_REGISTER_MAX=10
+RATE_LIMIT_WEBHOOK_WINDOW_MS=60000
+RATE_LIMIT_WEBHOOK_MAX=60
+RATE_LIMIT_UPLOAD_WINDOW_MS=3600000
+RATE_LIMIT_UPLOAD_MAX=20
 ```
 
 > **Catatan:** Jangan commit file `.env` ke repository publik. Pastikan `.env` terdaftar di `.gitignore`.
 >
-> **Keamanan wajib:** `JWT_SECRET` dan `ADMIN_JWT_SECRET` harus diisi dan nilainya berbeda. Aplikasi gagal start jika salah satu kosong. Rate limit dapat disesuaikan lewat `RATE_LIMIT_LOGIN_MAX`, `RATE_LIMIT_REGISTER_MAX`, `RATE_LIMIT_WEBHOOK_MAX`, dan `RATE_LIMIT_UPLOAD_MAX` (default: 10/15 menit, 10/jam, 60/menit, 20/jam). Permintaan yang melewati batas menerima `429` dengan header `Retry-After`.
+> **Keamanan wajib:** `JWT_SECRET` dan `ADMIN_JWT_SECRET` harus diisi dan nilainya berbeda. Aplikasi gagal start jika salah satu kosong. Rate limit dapat disesuaikan lewat `RATE_LIMIT_*_MAX` dan `RATE_LIMIT_*_WINDOW_MS` (default login 10/15 menit, register 10/jam, webhook 60/menit, upload 20/jam). Permintaan yang melewati batas menerima `429` dengan header `Retry-After`.
 
 ### 3. Migrasi Database
-Jalankan migrasi tabel database PostgreSQL:
+`node-pg-migrate` membaca `DATABASE_URL` dari `.env`; pastikan variabel ini menunjuk ke database yang benar sebelum menjalankan migrasi. Jalankan migrasi tabel database PostgreSQL:
 ```bash
 # Menjalankan seluruh migrasi yang belum dieksekusi
 npm run migrate:up

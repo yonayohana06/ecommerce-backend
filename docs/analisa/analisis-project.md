@@ -221,14 +221,14 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 - **Index berlebihan:** ada index duplikat di tabel `products`; bersihkan agar write tidak lambat.
 - **Pencarian admin lambat saat data besar:** `CAST(o.id AS TEXT) ILIKE ...` tidak memakai index; pertimbangkan exact match untuk ID numerik.
 - **Index `orders(status, created_at)` belum ada:** penting untuk dashboard admin saat order sudah banyak.
-- **Dokumentasi tidak akurat:**
-  - README memakai base URL `3000`, kode default `3001`.
-  - README menyebut JWT user 7 hari, `.env` memakai `1d`.
-  - README menyebut HMAC SHA-512, implementasi memakai SHA-512 hash (gaya Midtrans).
-  - README menulis `NUMERIC(12)`, DB lama memakai `NUMERIC(12,2)`; DB baru mengikuti migration `NUMERIC(12)` dan scale 0 dipertahankan.
+- **Dokumentasi tidak akurat:** **Update 8 November 2026:** selesai.
+  - README memakai base URL `3000`, kode default `3001`. → diperbaiki menjadi `3001`.
+  - README menyebut JWT user 7 hari, `.env` memakai `1d`. → README dan default kode disamakan ke `1d`; admin `8h`.
+  - README menyebut HMAC SHA-512, implementasi memakai SHA-512 hash (gaya Midtrans). → dokumentasi diperjelas sebagai SHA-512 hash, bukan HMAC keyed.
+  - README menulis `NUMERIC(12)`, DB lama memakai `NUMERIC(12,2)`; DB baru mengikuti migration `NUMERIC(12)` dan scale 0 dipertahankan. → README menegaskan scale 0.
 - **Seed admin:** sudah ditambahkan script `npm run seed:admin` pada 8 November 2026; admin pertama (`admin@fastshop.id`) sudah dibuat.
-- **Tidak ada `.env.example`:** menyulitkan setup.
-- **Dead code:** `verifyAuthToken` dan `authorize` tidak dipakai; ada import tidak terpakai di `productService.js`.
+- **Tidak ada `.env.example`:** menyulitkan setup. **Update 8 November 2026:** `.env.example` lengkap ditambahkan dan divalidasi test.
+- **Dead code:** `verifyAuthToken` dan `authorize` tidak dipakai; import tidak terpakai di `productService.js` sudah dihapus.
 - **Duplikasi:** controller/service produk & kategori publik vs admin hampir sama; pagination logic berulang.
 - **Health check `/200`** hanya mengecek Supabase, bukan PostgreSQL utama; sebaiknya ada `/health` dan `/ready`.
 - **Tidak ada `helmet`, request logging, request ID, atau metrics.**
@@ -269,7 +269,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 - ~~Pisahkan `app.js` dan `server.js` untuk serverless.~~ (sudah dikerjakan)
 - ~~Tambahkan constraint skema dan index yang hilang.~~ (sudah dikerjakan)
 - ~~Samakan format numeric di response API.~~ (sudah dikerjakan)
-- Update README, tambahkan `.env.example` dan seed script.
+- ~~Update README, tambahkan `.env.example` dan seed script.~~ (sudah dikerjakan)
 - Tambahkan `pool.on("error")`, graceful shutdown, `/health`.
 
 ### P2 — Berikutnya
@@ -286,6 +286,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 185 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 189 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.
