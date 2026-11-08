@@ -8,6 +8,8 @@ const { validateEnv } = require("./config/env");
 validateEnv(process.env, { requireDatabase: false });
 
 const db = require("./config/db");
+const { logger } = require("./utils/logger");
+const { createRequestLogger } = require("./middlewares/requestLogger");
 const authRoutes = require("./routes/authRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const cartRoutes = require("./routes/cartRoutes");
@@ -20,6 +22,7 @@ const app = express();
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
+app.use(createRequestLogger({ logger }));
 app.use(helmet());
 app.use(express.json());
 
@@ -35,6 +38,7 @@ app.use(
     ],
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    exposedHeaders: ["X-Request-Id"],
     credentials: true,
   }),
 );
@@ -54,7 +58,16 @@ app.get("/ready", async (req, res) => {
     await db.query("SELECT 1");
     return res.status(200).json({ status: "ready" });
   } catch (error) {
-    console.error("Readiness check gagal:", error.message);
+    const log = req.log || logger;
+    log.error({
+      msg: "readiness_failed",
+      requestId: req.id,
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      },
+    });
     return res.status(503).json({
       code: 503,
       message: "Database belum siap.",

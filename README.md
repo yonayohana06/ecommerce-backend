@@ -37,6 +37,8 @@ ECOMMERCE-BACKEND/
 │   │   └── productController.js      # Katalog & detail produk publik
 │   ├── middlewares/
 │   │   ├── authMiddleware.js         # Token verification (verifyUserToken, verifyAdminToken, verifyAuthToken, RBAC)
+│   │   ├── errorHandler.js           # Error JSON konsisten + log stack di server
+│   │   ├── requestLogger.js          # X-Request-Id + log request terstruktur
 │   │   ├── uploadMiddleware.js       # Konfigurasi Multer memory storage (gambar, maks 2MB)
 │   │   └── verifySignature.js        # Verifikasi SHA-512 hash signature payment gateway
 │   ├── routes/
@@ -58,6 +60,9 @@ ECOMMERCE-BACKEND/
 │   │   ├── orderService.js           # Transaksi checkout ACID & FOR UPDATE row locking
 │   │   ├── paymentService.js         # Upload ke Supabase Storage, Signed URL, sinkronisasi stok
 │   │   └── productService.js         # Filter produk, ILIKE search, pagination, soft/hard delete
+│   ├── utils/
+│   │   ├── logger.js                 # Logger JSON terstruktur (info/warn/error/silent)
+│   │   └── serializers.js            # Konversi numeric PostgreSQL ke number response
 │   ├── app.js                        # Express app murni (tanpa listener)
 │   └── server.js                     # Entry point lokal: listener, cek DB, graceful shutdown
 ├── .env                              # Variabel lingkungan/environment (tidak di-commit)
@@ -100,6 +105,12 @@ Sistem memisahkan secara ketat alur autentikasi dan otorisasi antara **Pelanggan
 ### 4. Proteksi Konkurensi Database (ACID & Row Locking)
 * Pada saat checkout (`orderService.checkout`), proses dibungkus dalam transaksi database (`BEGIN ... COMMIT / ROLLBACK`).
 * Menggunakan `SELECT ... FOR UPDATE OF p` untuk mengunci baris produk guna mencegah *race condition* dan *overselling* stok ketika banyak user checkout produk yang sama secara bersamaan.
+
+### 5. Observability Dasar
+* Setiap request mendapat `X-Request-Id` (dari client jika valid, atau UUID baru) dan header yang sama dikirim kembali ke response.
+* Request diselesaikan dengan satu log JSON terstruktur berisi `requestId`, `method`, `path`, `status`, dan `durationMs`. Respons 5xx dicatat pada level `error`.
+* Error tak tertangani dicatat di server beserta `stack`, tetapi response client tetap generik tanpa detail internal.
+* Level log diatur lewat `LOG_LEVEL` (`info`, `warn`, `error`, atau `silent`).
 
 ---
 
@@ -288,6 +299,9 @@ Referensi variabel:
 
 ```env
 PORT=3001
+
+# Level log terstruktur: info, warn, error, silent
+LOG_LEVEL=info
 
 # Database PostgreSQL Lokal
 DB_HOST=localhost

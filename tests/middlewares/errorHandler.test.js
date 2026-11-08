@@ -5,7 +5,7 @@ const multer = require("multer");
 const errorHandler = require("../../src/middlewares/errorHandler");
 const { HttpError } = require("../../src/utils/httpError");
 
-function runHandler(error, { headersSent = false } = {}) {
+function runHandler(error, { headersSent = false, req = {} } = {}) {
   const response = {
     headersSent,
     statusCode: null,
@@ -22,7 +22,7 @@ function runHandler(error, { headersSent = false } = {}) {
 
   let nextError = null;
 
-  errorHandler(error, {}, response, (err) => {
+  errorHandler(error, req, response, (err) => {
     nextError = err === undefined ? true : err;
   });
 
@@ -102,6 +102,50 @@ test("error tak dikenal menjadi 500 tanpa detail internal", () => {
     message: "Terjadi kesalahan pada server.",
   });
   assert.doesNotMatch(JSON.stringify(response.body), /rahasia_internal|relation/i);
+});
+
+test("error 500 dicatat di server beserta stack dan request ID", () => {
+  const logs = [];
+  const req = {
+    id: "req-error-1",
+    method: "GET",
+    path: "/api/rahasia",
+    log: {
+      error(fields) {
+        logs.push(fields);
+      },
+    },
+  };
+
+  const { response } = runHandler(new Error("boom internal"), { req });
+
+  assert.equal(response.statusCode, 500);
+  assert.equal(logs.length, 1);
+  assert.equal(logs[0].msg, "request_error");
+  assert.equal(logs[0].requestId, "req-error-1");
+  assert.match(logs[0].error.stack, /boom internal/);
+  assert.doesNotMatch(JSON.stringify(response.body), /boom internal|stack/i);
+});
+
+test("error 4xx tidak dicatat sebagai error server", () => {
+  const logs = [];
+  const req = {
+    id: "req-error-2",
+    method: "POST",
+    path: "/api/auth/login",
+    log: {
+      error(fields) {
+        logs.push(fields);
+      },
+    },
+  };
+
+  const { response } = runHandler(new HttpError(400, "Input tidak valid"), {
+    req,
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(logs.length, 0);
 });
 
 test("malformed JSON dari express.json menjadi 400 JSON", () => {

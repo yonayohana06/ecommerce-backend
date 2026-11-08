@@ -1,5 +1,9 @@
 require("dotenv").config();
 
+// Test suite tidak perlu menulis setiap request ke stdout; test logger
+// memakai stream injeksi sendiri.
+process.env.LOG_LEVEL = "silent";
+
 // Fallback agar `npm test` tetap bisa dijalankan tanpa file .env.
 // Nilai nyata dari environment/.env tetap dipakai jika sudah ada.
 process.env.JWT_SECRET ||= "test-user-jwt-secret";

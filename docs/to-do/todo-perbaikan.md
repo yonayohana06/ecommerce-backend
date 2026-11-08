@@ -614,27 +614,47 @@ Hasil: 4/4 test `.env.example` lulus. `npm test` 65 pass + 124 skip (189 total),
 
 **Temuan:** 4.3 (tidak ada request logging, request ID, metrics).
 
+**Progres 8 November 2026:** selesai. `src/utils/logger.js` menyediakan logger JSON terstruktur (info/warn/error/silent) dengan child logger. `src/middlewares/requestLogger.js` baru memberikan `X-Request-Id` pada setiap request (dari client jika valid, atau UUID baru), mengirim header kembali, dan mencatat satu baris JSON per respons dengan `requestId`, `method`, `path`, `status`, dan `durationMs`; respons 5xx dicatat pada level `error`. `src/middlewares/errorHandler.js` mencatat error 500 beserta stack dan request ID ke server tanpa membocorkan detail ke client. `src/server.js` mencatat database connected, server started, shutdown, dan gagal shutdown ke logger. `/health` dan `/ready` sudah tersedia; graceful shutdown `SIGTERM`/`SIGINT` menutup pool dengan timeout 10 detik. Level log diatur lewat `LOG_LEVEL`.
+
 **Estimasi:** S–M
 
 **Files:**
 - `src/app.js`
+- `src/server.js`
 - `src/middlewares/requestLogger.js` (baru)
-- `src/config/db.js`
+- `src/middlewares/errorHandler.js`
+- `src/utils/logger.js` (baru)
+- `tests/setup.js`
 - `README.md`
+- `.env.example`
+- `tests/middlewares/requestLogger.test.js`
+- `tests/middlewares/errorHandler.test.js`
+- `tests/api/observability.test.js`
 
 **Langkah:**
-- [ ] Tambahkan request logging terstruktur (pino/morgan).
-- [ ] Tambahkan request ID per request.
-- [ ] Log error dengan stack trace di server, tanpa membocorkan ke client.
-- [ ] Tambahkan `/health` dan `/ready`.
-- [ ] Tambahkan graceful shutdown (`SIGTERM`/`SIGINT`) yang menutup pool.
-- [ ] Opsional: integrasi error tracking (Sentry).
+- [x] Tambahkan request logging terstruktur (logger JSON, bukan pino/morgan agar bebas dependensi).
+- [x] Tambahkan request ID per request (`X-Request-Id`).
+- [x] Log error dengan stack trace di server, tanpa membocorkan ke client.
+- [x] Tambahkan `/health` dan `/ready` (sudah ada dari P1-04).
+- [x] Tambahkan graceful shutdown (`SIGTERM`/`SIGINT`) yang menutup pool.
+- [ ] Opsional: integrasi error tracking (Sentry). *(dipindah ke backlog; belum diprioritaskan)*
 
 **Definition of Done:**
-- [ ] Setiap request memiliki log dan request ID.
-- [ ] Error tercatat di server.
-- [ ] Health check mencerminkan kondisi DB.
-- [ ] Shutdown tidak meninggalkan koneksi menggantung.
+- [x] Setiap request memiliki log dan request ID.
+- [x] Error tercatat di server.
+- [x] Health check mencerminkan kondisi DB.
+- [x] Shutdown tidak meninggalkan koneksi menggantung.
+
+**Verifikasi:**
+```bash
+npm test
+npm run test:db
+npm run test:coverage
+npm run lint
+npm audit --omit=dev
+```
+
+Hasil: 26/26 test observability dan error handler lulus. `npm test` 80 pass + 124 skip (204 total), `npm run test:db` 204/204 lulus, coverage 86,88% lines / 76,95% branches / 91,67% functions, `npm run lint` OK untuk 86 file, `npm audit --omit=dev` 0 vulnerabilities, `git diff --check` bersih. Smoke lokal `PORT=3457 node src/server.js`: `/health` 200 dengan `X-Request-Id`, log JSON terstruktur, graceful shutdown SIGTERM exit 0.
 
 ---
 

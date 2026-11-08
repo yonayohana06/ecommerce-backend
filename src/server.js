@@ -3,6 +3,7 @@ require("dotenv").config({ quiet: true });
 const app = require("./app");
 const db = require("./config/db");
 const { validateEnv } = require("./config/env");
+const { logger } = require("./utils/logger");
 
 const PORT = process.env.PORT || 3001;
 const SHUTDOWN_TIMEOUT_MS = 10000;
@@ -12,10 +13,13 @@ const startServer = async () => {
     validateEnv();
 
     const result = await db.query("SELECT NOW()");
-    console.log("✅ PostgreSQL Connected successfully at:", result.rows[0].now);
+    logger.info({
+      msg: "database_connected",
+      connectedAt: result.rows[0].now,
+    });
 
     const server = app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+      logger.info({ msg: "server_started", port: Number(PORT) });
     });
 
     let shuttingDown = false;
@@ -24,10 +28,13 @@ const startServer = async () => {
       if (shuttingDown) return;
       shuttingDown = true;
 
-      console.log(`${signal} diterima, menutup server...`);
+      logger.info({ msg: "shutdown_started", signal });
 
       const forceExit = setTimeout(() => {
-        console.error("Shutdown timeout, keluar paksa.");
+        logger.error({
+          msg: "shutdown_timeout",
+          timeoutMs: SHUTDOWN_TIMEOUT_MS,
+        });
         process.exit(1);
       }, SHUTDOWN_TIMEOUT_MS);
 
@@ -37,12 +44,26 @@ const startServer = async () => {
         try {
           await db.pool.end();
         } catch (poolError) {
-          console.error("Gagal menutup pool database:", poolError.message);
+          logger.error({
+            msg: "database_pool_close_failed",
+            error: {
+              name: poolError.name,
+              message: poolError.message,
+              stack: poolError.stack,
+            },
+          });
         } finally {
           clearTimeout(forceExit);
 
           if (error) {
-            console.error("Gagal menutup HTTP server:", error.message);
+            logger.error({
+              msg: "http_server_close_failed",
+              error: {
+                name: error.name,
+                message: error.message,
+                stack: error.stack,
+              },
+            });
             process.exit(1);
           }
 
@@ -56,7 +77,14 @@ const startServer = async () => {
 
     return server;
   } catch (error) {
-    console.error("❌ Gagal menjalankan server:", error.message);
+    logger.error({
+      msg: "server_start_failed",
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      },
+    });
     process.exit(1);
   }
 };

@@ -208,11 +208,11 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 - Listener tidak diperlukan dan bisa mengganggu lifecycle serverless.
 - Pengecekan DB saat cold start menambah latency.
 - `pg.Pool` default bisa membuka 10 koneksi per instance; berisiko menghabiskan koneksi Supabase.
-- Tidak ada graceful shutdown dan `pool.on("error")`.
+- **Tidak ada graceful shutdown dan `pool.on("error")`.** **Update 8 November 2026:** selesai; `src/server.js` menangani graceful shutdown dan `src/config/db.js` memakai `pool.on("error")`.
 
 **Rekomendasi:** pisahkan `app.js` (pure Express app) dan `server.js` (listener lokal), gunakan Supabase connection pooler untuk production, batasi `pool.max`, dan tambahkan error handler pool.
 
-**Update 8 November 2026:** selesai. `src/app.js` kini Express app murni tanpa listener; `src/server.js` menangani listen, pengecekan database awal, `SIGTERM`/`SIGINT`, dan penutupan pool. `src/config/db.js` memakai `DB_POOL_MAX` (default 5, maksimal 20), `pool.on("error")`, serta timeout idle/connection. `/health` dan `/ready` tersedia (`/ready` mengembalikan 503 bila database gagal), dan `/200` menjadi alias `/health`. `vercel.json` menetapkan `maxDuration: 30`. README mencantumkan penggunaan Supabase connection pooler untuk production. Test bertambah menjadi 168 dan semuanya lulus.
+**Update 8 November 2026:** selesai. `src/app.js` kini Express app murni tanpa listener; `src/server.js` menangani listen, pengecekan database awal, `SIGTERM`/`SIGINT`, dan penutupan pool. `src/config/db.js` memakai `DB_POOL_MAX` (default 5, maksimal 20), `pool.on("error")`, serta timeout idle/connection. `/health` dan `/ready` tersedia (`/ready` mengembalikan 503 bila database gagal), dan `/200` menjadi alias `/health`. `vercel.json` menetapkan `maxDuration: 30`. README mencantumkan penggunaan Supabase connection pooler untuk production. Test bertambah menjadi 204 dan semuanya lulus.
 
 ### 4.3 Sedang
 
@@ -230,8 +230,11 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 - **Tidak ada `.env.example`:** menyulitkan setup. **Update 8 November 2026:** `.env.example` lengkap ditambahkan dan divalidasi test.
 - **Dead code:** `verifyAuthToken` dan `authorize` tidak dipakai; import tidak terpakai di `productService.js` sudah dihapus.
 - **Duplikasi:** controller/service produk & kategori publik vs admin hampir sama; pagination logic berulang.
-- **Health check `/200`** hanya mengecek Supabase, bukan PostgreSQL utama; sebaiknya ada `/health` dan `/ready`.
-- **Tidak ada `helmet`, request logging, request ID, atau metrics.**
+- **Health check `/200`** hanya mengecek Supabase, bukan PostgreSQL utama; sebaiknya ada `/health` dan `/ready`. **Update 8 November 2026:** selesai; `/200` sekarang alias `/health` tanpa RPC Supabase, dan `/ready` menjalankan `SELECT 1` ke PostgreSQL utama.
+- **Observabilitas dasar:** **Update 8 November 2026:** selesai.
+  - `src/utils/logger.js` (logger JSON terstruktur), `src/middlewares/requestLogger.js` (X-Request-Id + log per respons), dan `src/middlewares/errorHandler.js` (log stack error di server) ditambahkan.
+  - `src/server.js` mencatat database connected, server started, shutdown, dan gagal shutdown.
+  - Level log diatur lewat `LOG_LEVEL`.
 - **`dotenv` versi 17 mencetak pesan promosi di log**; pertimbangkan `dotenv.config({ quiet: true })` atau central config.
 
 ## 5. Skema Aktual vs Migration
@@ -270,7 +273,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 - ~~Tambahkan constraint skema dan index yang hilang.~~ (sudah dikerjakan)
 - ~~Samakan format numeric di response API.~~ (sudah dikerjakan)
 - ~~Update README, tambahkan `.env.example` dan seed script.~~ (sudah dikerjakan)
-- Tambahkan `pool.on("error")`, graceful shutdown, `/health`.
+- ~~Tambahkan `pool.on("error")`, graceful shutdown, `/health`.~~ (sudah dikerjakan)
 
 ### P2 — Berikutnya
 
@@ -286,6 +289,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 189 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 204 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.

@@ -1,6 +1,7 @@
 const multer = require("multer");
 
 const { HttpError } = require("../utils/httpError");
+const { logger } = require("../utils/logger");
 
 const PG_ERRORS = {
   "22P02": [400, "Input tidak valid."],
@@ -47,7 +48,19 @@ const errorHandler = (error, req, res, next) => {
     statusCode = error.statusCode;
     message = error.message || "Permintaan tidak valid.";
   } else {
-    console.error("Unhandled error:", error);
+    const log = req.log || logger;
+    log.error({
+      msg: "request_error",
+      requestId: req.id,
+      method: req.method,
+      path: req.path,
+      error: {
+        name: error && error.name,
+        message: error && error.message,
+        code: error && error.code,
+        stack: error && error.stack,
+      },
+    });
   }
 
   return res.status(statusCode).json({
