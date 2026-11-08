@@ -1,5 +1,5 @@
 const db = require("../config/db");
-const { get } = require("../routes/authRoutes");
+const { serializeProduct } = require("../utils/serializers");
 
 const getProducts = async ({ categoryId, search, page = 1, limit = 10 }) => {
   const conditions = ["p.is_active = TRUE"];
@@ -69,7 +69,7 @@ const getProducts = async ({ categoryId, search, page = 1, limit = 10 }) => {
   const hasNextPage = pageNum < totalPages;
 
   return {
-    products: result.rows,
+    products: result.rows.map(serializeProduct),
     pagination: {
       currentPage: pageNum,
       limit: limitNum,
@@ -100,7 +100,7 @@ const getProductById = async (id) => {
   const result = await db.query(query, [id]);
 
   // Kembalikan objek produk jika ditemukan, atau null jika tidak ada
-  return result.rows[0] || null;
+  return serializeProduct(result.rows[0] || null);
 };
 
 const getProductsAdmin = async ({
@@ -177,7 +177,7 @@ const getProductsAdmin = async ({
   const hasNextPage = pageNum < totalPages;
 
   return {
-    products: result.rows,
+    products: result.rows.map(serializeProduct),
     pagination: {
       currentPage: pageNum,
       limit: limitNum,
@@ -209,7 +209,7 @@ const getProductByIdAdmin = async (id) => {
   const result = await db.query(query, [id]);
 
   // Kembalikan objek produk jika ditemukan, atau null jika tidak ada
-  return result.rows[0] || null;
+  return serializeProduct(result.rows[0] || null);
 };
 
 const createProduct = async (data) => {
@@ -230,7 +230,7 @@ const createProduct = async (data) => {
     is_active !== undefined ? is_active : true,
   ];
   const result = await db.query(query, values);
-  return result.rows[0];
+  return serializeProduct(result.rows[0]);
 };
 
 const updateProduct = async (id, data) => {
@@ -261,7 +261,7 @@ const updateProduct = async (id, data) => {
     id,
   ];
   const result = await db.query(query, values);
-  return result.rows[0];
+  return serializeProduct(result.rows[0]);
 };
 
 const deleteProduct = async (id) => {
@@ -283,7 +283,7 @@ const deleteProduct = async (id) => {
       RETURNING *, 'soft_deleted' AS delete_type;
     `;
     const result = await db.query(softDeleteQuery, [id]);
-    return result.rows[0];
+    return serializeProduct(result.rows[0]);
   }
 
   // 3. Jika BELUM PERNAH DIBELI -> Hard Delete (Hapus permanen dari DB)
@@ -293,7 +293,7 @@ const deleteProduct = async (id) => {
     RETURNING *, 'hard_deleted' AS delete_type;
   `;
   const result = await db.query(hardDeleteQuery, [id]);
-  return result.rows[0];
+  return serializeProduct(result.rows[0]);
 };
 
 module.exports = {

@@ -527,6 +527,8 @@ Hasil: migrasi baru `1794147578012_align-cart-items-bigint` menerapkan `bigint` 
 
 **Temuan:** 4.3 (harga produk/cart berupa string, order berupa number).
 
+**Progres 8 November 2026:** selesai. `src/utils/serializers.js` menyediakan `toNumber`, `serializeProduct`, `serializeCartItem`, dan `serializeOrder`. Semua harga/total pada katalog publik dan admin, keranjang, checkout, daftar/detail order user dan admin, upload bukti bayar, perubahan status admin, webhook, serta ringkasan dashboard kini dikembalikan sebagai JSON `number`. `numeric(12)` scale 0 tetap dipertahankan di database.
+
 **Estimasi:** S–M
 
 **Files:**
@@ -537,19 +539,31 @@ Hasil: migrasi baru `1794147578012_align-cart-items-bigint` menerapkan `bigint` 
 - `src/utils/serializers.js` (baru)
 - `README.md`
 - `tests/api/*`
+- `tests/utils/serializers.test.js`
 
 **Langkah:**
-- [ ] Tentukan kontrak: semua harga, subtotal, dan total dikembalikan sebagai number.
-- [ ] Buat serializer `toNumber` yang aman untuk numeric PostgreSQL.
-- [ ] Terapkan pada product list/detail, cart, checkout, order list/detail, dan admin order.
-- [ ] Pastikan konversi aman untuk nilai Rupiah bulat (`numeric(12)` scale 0).
-- [ ] Tambahkan test tipe data response.
-- [ ] Perbarui dokumentasi API.
+- [x] Tentukan kontrak: semua harga, subtotal, dan total dikembalikan sebagai number.
+- [x] Buat serializer `toNumber` yang aman untuk numeric PostgreSQL.
+- [x] Terapkan pada product list/detail, cart, checkout, order list/detail, dan admin order.
+- [x] Pastikan konversi aman untuk nilai Rupiah bulat (`numeric(12)` scale 0).
+- [x] Tambahkan test tipe data response.
+- [x] Perbarui dokumentasi API.
 
 **Definition of Done:**
-- [ ] Tipe numeric konsisten di seluruh endpoint.
-- [ ] Test response schema lulus.
-- [ ] README menjelaskan kontrak angka.
+- [x] Tipe numeric konsisten di seluruh endpoint.
+- [x] Test response schema lulus.
+- [x] README menjelaskan kontrak angka.
+
+**Verifikasi:**
+```bash
+node --require ./tests/setup.js --test tests/utils/serializers.test.js
+npm run test:db
+npm run test:coverage
+npm run lint
+npm audit --omit=dev
+```
+
+Hasil: 8/8 test serializer dan 8/8 test integrasi numeric lulus. `npm test` 61 pass + 124 skip (185 total), `npm run test:db` 185/185 lulus, coverage 86,57% lines / 77,05% branches / 91,62% functions, `npm run lint` OK untuk 81 file, `npm audit --omit=dev` 0 vulnerabilities.
 
 ### P1-07: Perbarui dokumentasi, `.env.example`, dan seed admin
 

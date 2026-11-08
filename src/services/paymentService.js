@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { serializeOrder, toNumber } = require("../utils/serializers");
 const supabase = require("../config/supabase");
 const ORDER_STATUS = require("../constants/orderStatus");
 const orderStatusService = require("./orderStatusService");
@@ -81,7 +82,7 @@ const submitPaymentProof = async (userId, orderId, file) => {
       paymentProofUrl: fileName,
     });
 
-    return result.order;
+    return serializeOrder(result.order);
   } catch (error) {
     // Jangan tinggalkan file orphan jika update database gagal.
     const { error: removeError } = await supabase.storage
@@ -115,7 +116,7 @@ const updateOrderStatus = async (orderId, newStatus) => {
     );
   }
 
-  return updatedOrder;
+  return serializeOrder(updatedOrder);
 };
 
 // Admin Get All Orders (Filter & Pagination & Signed URL)
@@ -186,7 +187,7 @@ const getAllOrdersForAdmin = async ({
           order.payment_proof_url,
         );
       }
-      return order;
+      return serializeOrder(order);
     }),
   );
 
@@ -255,18 +256,10 @@ const getOrderDetailForAdmin = async (orderId) => {
     order.payment_proof_url = await generateSignedUrl(order.payment_proof_url);
   }
 
-  // Format harga subtotal ke float
-  const items = itemsResult.rows.map((item) => ({
-    ...item,
-    price_at_purchase: parseFloat(item.price_at_purchase),
-    subtotal: parseFloat(item.subtotal),
-  }));
-
-  return {
+  return serializeOrder({
     ...order,
-    total_amount: parseFloat(order.total_amount),
-    items,
-  };
+    items: itemsResult.rows,
+  });
 };
 
 const getOrderSummaryForAdmin = async () => {
@@ -291,7 +284,7 @@ const getOrderSummaryForAdmin = async () => {
 
   return {
     totalOrders: parseInt(row.total_orders, 10),
-    totalRevenue: parseFloat(row.total_revenue),
+    totalRevenue: toNumber(row.total_revenue),
     ordersByStatus: {
       PENDING: parseInt(row.pending, 10),
       PROCESSING: parseInt(row.processing, 10),

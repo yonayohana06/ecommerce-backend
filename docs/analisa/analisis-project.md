@@ -216,7 +216,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 ### 4.3 Sedang
 
-- **Format angka tidak konsisten:** endpoint produk/cart mengembalikan numeric sebagai string (`"1950000.00"`), sedangkan order list/detail mengubahnya menjadi number. Frontend bisa bingung.
+- **Format angka tidak konsisten:** endpoint produk/cart mengembalikan numeric sebagai string (`"1950000.00"`), sedangkan order list/detail mengubahnya menjadi number. Frontend bisa bingung. **Update 8 November 2026:** selesai; `src/utils/serializers.js` menyeragamkan seluruh harga/total menjadi JSON number di product, cart, checkout, order user/admin, webhook, upload bukti bayar, dan dashboard.
 - **N+1 signed URL:** setiap order memanggil `createSignedUrl` satu per satu; untuk `limit=100` bisa lambat dan rawan timeout Vercel. Pertimbangkan `createSignedUrls` batch atau cache.
 - **Index berlebihan:** ada index duplikat di tabel `products`; bersihkan agar write tidak lambat.
 - **Pencarian admin lambat saat data besar:** `CAST(o.id AS TEXT) ILIKE ...` tidak memakai index; pertimbangkan exact match untuk ID numerik.
@@ -268,7 +268,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 - ~~Hardening upload (allowlist, magic bytes, cleanup).~~ (sudah dikerjakan)
 - ~~Pisahkan `app.js` dan `server.js` untuk serverless.~~ (sudah dikerjakan)
 - ~~Tambahkan constraint skema dan index yang hilang.~~ (sudah dikerjakan)
-- Samakan format numeric di response API.
+- ~~Samakan format numeric di response API.~~ (sudah dikerjakan)
 - Update README, tambahkan `.env.example` dan seed script.
 - Tambahkan `pool.on("error")`, graceful shutdown, `/health`.
 
@@ -286,6 +286,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 169 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 185 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.

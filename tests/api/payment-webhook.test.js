@@ -218,6 +218,7 @@ dbTest("upload bukti bayar valid mengubah status ke PROCESSING", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(response.body.data.status, "PROCESSING");
+  assert.equal(typeof response.body.data.total_amount, "number");
   assert.equal(response.body.data.payment_proof_url, storageMock.uploaded.fileName);
   assert.equal(storageMock.uploaded.bucket, "payment-proofs");
   assert.equal(storageMock.uploaded.options.contentType, "image/png");
@@ -453,6 +454,7 @@ dbTest("admin mengubah status mengembalikan signed URL bukti bayar", async () =>
 
   assert.equal(response.status, 200);
   assert.equal(response.body.data.status, "PAID");
+  assert.equal(typeof response.body.data.total_amount, "number");
   assert.equal(
     response.body.data.payment_proof_url,
     "https://example.test/proof-signed.png",
@@ -541,6 +543,7 @@ dbTest("webhook settlement mengubah status ke PAID tanpa mengubah stok", async (
 
   assert.equal(response.status, 200);
   assert.equal(response.body.data.status, "PAID");
+  assert.equal(typeof response.body.data.total_amount, "number");
   assert.equal(response.body.data.already_processed, false);
   assert.equal(await getStock(), 8);
 });

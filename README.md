@@ -264,6 +264,8 @@ Base URL: `http://localhost:3000/api`
 
 > **Sinkronisasi status & stok:** admin, webhook, dan upload bukti bayar memakai service transaksional yang sama (`orderStatusService`). Webhook duplikat bersifat idempotent (stok tidak berubah dua kali), dan `transaction_status` yang tidak dikenal ditolak dengan HTTP 400.
 
+> **Kontrak angka:** semua field harga dan total (`products.price`, `price`/`subtotal` item keranjang, `grand_total`, `orders.total_amount`, `order_items.price_at_purchase`/`subtotal`, serta `totalRevenue` dashboard) dikembalikan sebagai JSON `number`, bukan string numeric PostgreSQL.
+
 ---
 
 ## 💻 Cara Menjalankan

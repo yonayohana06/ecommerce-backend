@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { serializeCartItem } = require("../utils/serializers");
 
 const createServiceError = (message, statusCode) => {
   const error = new Error(message);
@@ -92,7 +93,7 @@ const getCartByUser = async (userId) => {
     ORDER BY ci.created_at DESC;
   `;
   const result = await db.query(query, [userId]);
-  return result.rows;
+  return result.rows.map(serializeCartItem);
 };
 
 // Update quantity item spesifik di keranjang

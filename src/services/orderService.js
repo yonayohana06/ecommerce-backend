@@ -1,4 +1,5 @@
 const { pool } = require("../config/db");
+const { serializeOrder } = require("../utils/serializers");
 const ORDER_STATUS = require("../constants/orderStatus");
 const orderStatusService = require("./orderStatusService");
 const { generateSignedUrl } = require("./paymentService");
@@ -100,7 +101,7 @@ const checkout = async (userId, shippingAddress) => {
     // 7. Simpan Seluruh Perubahan jika Tidak Ada Error
     await client.query("COMMIT");
 
-    return newOrder;
+    return serializeOrder(newOrder);
   } catch (error) {
     // Jika ada error pada tahap apa pun, kembalikan kondisi database ke semula (Rollback)
     await client.query("ROLLBACK");
@@ -193,16 +194,10 @@ const getUserOrders = async ({ userId, status, page = 1, limit = 10 }) => {
       if (order.payment_proof_url) {
         signedProofUrl = await generateSignedUrl(order.payment_proof_url);
       }
-      return {
+      return serializeOrder({
         ...order,
         payment_proof_url: signedProofUrl,
-        total_amount: parseFloat(order.total_amount),
-        items: (order.items || []).map((item) => ({
-          ...item,
-          price_at_purchase: parseFloat(item.price_at_purchase),
-          subtotal: parseFloat(item.subtotal),
-        })),
-      };
+      });
     }),
   );
 
@@ -275,18 +270,11 @@ const getUserOrderDetail = async ({ userId, orderId }) => {
     signedProofUrl = await generateSignedUrl(order.payment_proof_url);
   }
 
-  const items = itemsResult.rows.map((item) => ({
-    ...item,
-    price_at_purchase: parseFloat(item.price_at_purchase),
-    subtotal: parseFloat(item.subtotal),
-  }));
-
-  return {
+  return serializeOrder({
     ...order,
     payment_proof_url: signedProofUrl,
-    total_amount: parseFloat(order.total_amount),
-    items,
-  };
+    items: itemsResult.rows,
+  });
 };
 
 // Update status pesanan (digunakan untuk webhook payment gateway)
@@ -304,11 +292,11 @@ const updateOrderStatus = async ({
       source,
     });
 
-  return {
+  return serializeOrder({
     ...order,
     previous_status: previousStatus,
     already_processed: !changed,
-  };
+  });
 };
 
 module.exports = {
