@@ -133,6 +133,31 @@ test(
 );
 
 test(
+  "cart_items.user_id dan product_id memakai bigint",
+  { skip: !runDbTests },
+  async () => {
+    const columns = await db.query(
+      `SELECT column_name, data_type
+       FROM information_schema.columns
+       WHERE table_schema = 'public'
+         AND table_name = 'cart_items'
+         AND column_name IN ('user_id', 'product_id')
+       ORDER BY column_name`,
+    );
+
+    assert.equal(columns.rows.length, 2);
+
+    for (const column of columns.rows) {
+      assert.equal(
+        column.data_type,
+        "bigint",
+        `cart_items.${column.column_name} seharusnya bigint`,
+      );
+    }
+  },
+);
+
+test(
   "orders memiliki index (status, created_at)",
   { skip: !runDbTests },
   async () => {

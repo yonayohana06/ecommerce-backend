@@ -238,17 +238,18 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 | Objek | Migration | DB Baru (`fastshop-be`) | Catatan |
 |---|---|---|---|
-| `pgmigrations` | Ada | 5 migration tercatat | Teratasi |
+| `pgmigrations` | Ada | 5 migration tercatat di DB lokal | Perlu `npm run migrate:up` untuk menerapkan 2 migration terbaru |
 | `products.price` | `numeric(12)` scale 0 | `numeric(12)` scale 0 | Sesuai keputusan; tidak diubah |
 | `orders.total_amount` | `numeric(12)` scale 0 | `numeric(12)` scale 0 | Sesuai keputusan; tidak diubah |
 | `order_items.price_at_purchase` | `numeric(12)` scale 0 | `numeric(12)` scale 0 | Sesuai keputusan; tidak diubah |
 | `orders.payment_submitted_at` | `timestamptz` | `timestamptz` | Sesuai |
 | `cart_items.created_at/updated_at` | `timestamptz` | `timestamptz` | Sesuai setelah migration integritas |
-| `cart_items.user_id/product_id` | `integer` | `integer` | Masih bisa ditingkatkan ke `bigint` |
+| `cart_items.user_id/product_id` | `bigint` | `integer` (migration belum diterapkan) | Teratasi di migration `1794147578012`; selaras dengan `users.id`/`products.id` |
 | `users.role` | CHECK user/admin | CHECK user/admin | Teratasi |
 | `products.is_active` | `NOT NULL DEFAULT true` | `NOT NULL DEFAULT true` | Teratasi |
 | `orders.status` | `NOT NULL DEFAULT PENDING` | `NOT NULL DEFAULT PENDING` | Teratasi |
 | `orders(status, created_at)` | Index | Index `idx_orders_status_created` | Teratasi |
+| `users.email` | Unique index `LOWER(email)` | Belum diterapkan | Teratasi via migration `1794139640579` |
 
 ## 6. Rekomendasi Prioritas
 
@@ -266,7 +267,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 - ~~Perbaiki cart untuk produk nonaktif dan validasi add-to-cart.~~ (sudah dikerjakan)
 - ~~Hardening upload (allowlist, magic bytes, cleanup).~~ (sudah dikerjakan)
 - ~~Pisahkan `app.js` dan `server.js` untuk serverless.~~ (sudah dikerjakan)
-- ~~Tambahkan constraint skema dan index yang hilang.~~ (sudah dikerjakan; sisa `bigint` dan unique `LOWER(email)`).
+- ~~Tambahkan constraint skema dan index yang hilang.~~ (sudah dikerjakan)
 - Samakan format numeric di response API.
 - Update README, tambahkan `.env.example` dan seed script.
 - Tambahkan `pool.on("error")`, graceful shutdown, `/health`.
@@ -285,6 +286,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 168 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 169 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.

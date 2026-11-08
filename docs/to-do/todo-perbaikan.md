@@ -482,7 +482,7 @@ Hasil: `npm test` 53 pass + 115 skip (168 total), `npm run test:db` 168/168 lulu
 
 **Temuan:** 5 (integritas skema).
 
-**Progres:** sebagian besar item sudah dikerjakan melalui migration `1794119284866_add-integrity-constraints` pada 8 November 2026. Sisa: tipe `bigint` untuk `cart_items` dan unique index `LOWER(email)`.
+**Progres:** selesai 8 November 2026. Constraint dasar dikerjakan melalui migration `1794119284866_add-integrity-constraints`; unique index `LOWER(email)` melalui `1794139640579_add-users-lower-email-unique-index`; tipe `bigint` untuk `cart_items` melalui `1794147578012_align-cart-items-bigint`.
 
 **Estimasi:** M
 
@@ -495,8 +495,8 @@ Hasil: `npm test` 53 pass + 115 skip (168 total), `npm run test:db` 168/168 lulu
 - [x] Set `orders.status NOT NULL DEFAULT 'PENDING'`.
 - [x] Tambahkan `CHECK (role IN ('user', 'admin'))` pada `users.role`.
 - [x] Pastikan `CHECK (quantity > 0)` pada `cart_items.quantity`.
-- [ ] Selaraskan tipe `cart_items.user_id` dan `product_id` menjadi `bigint`.
-- [ ] Tambahkan unique index `LOWER(email)` pada `users.email`.
+- [x] Selaraskan tipe `cart_items.user_id` dan `product_id` menjadi `bigint`.
+- [x] Tambahkan unique index `LOWER(email)` pada `users.email`.
 - [x] Samakan tipe timestamp menjadi `timestamptz`.
 - [x] Hapus index duplikat (tidak ditemukan di DB baru).
 - [x] Tambahkan index `orders(status, created_at)`.
@@ -507,6 +507,21 @@ Hasil: `npm test` 53 pass + 115 skip (168 total), `npm run test:db` 168/168 lulu
 - [x] Tidak ada index duplikat.
 - [x] Migration aman untuk data existing (backfill NULL sebelum `NOT NULL`).
 - [x] Test migration lulus.
+
+**Verifikasi:**
+```bash
+npm run test:db:prepare
+RUN_DB_TESTS=1 node --require ./tests/setup.js --test tests/db/schema.test.js tests/db/migration.test.js
+DATABASE_URL="$TEST_DATABASE_URL" node ./node_modules/node-pg-migrate/bin/node-pg-migrate down 1
+DATABASE_URL="$TEST_DATABASE_URL" node ./node_modules/node-pg-migrate/bin/node-pg-migrate up
+npm test
+npm run test:db
+npm run test:coverage
+npm run lint
+npm audit --omit=dev
+```
+
+Hasil: migrasi baru `1794147578012_align-cart-items-bigint` menerapkan `bigint` pada `cart_items.user_id`/`product_id`; `down 1` mengembalikan keduanya ke `integer` dan `up` mengembalikannya ke `bigint`. `tests/db/schema.test.js` + `tests/db/migration.test.js` 13/13 lulus. `npm test` 53 pass + 116 skip (169 total), `npm run test:db` 169/169 lulus, coverage 82,75% lines / 78,24% branches / 88,24% functions, `npm run lint` OK untuk 78 file, `npm audit --omit=dev` 0 vulnerabilities, `git diff --check` bersih.
 
 ### P1-06: Samakan format numeric di response API
 

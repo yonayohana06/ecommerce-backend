@@ -81,7 +81,7 @@ test(
         const migrations = await client.query(
           "SELECT name FROM pgmigrations ORDER BY id",
         );
-        assert.equal(migrations.rowCount, 6);
+        assert.equal(migrations.rowCount, 7);
 
         const emailIndex = await client.query(
           `SELECT indexdef
@@ -93,6 +93,20 @@ test(
         assert.equal(emailIndex.rowCount, 1);
         assert.match(emailIndex.rows[0].indexdef, /UNIQUE/i);
         assert.match(emailIndex.rows[0].indexdef, /lower/i);
+
+        const cartColumns = await client.query(
+          `SELECT column_name, data_type
+           FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'cart_items'
+             AND column_name IN ('user_id', 'product_id')
+           ORDER BY column_name`,
+        );
+        assert.equal(cartColumns.rowCount, 2);
+
+        for (const column of cartColumns.rows) {
+          assert.equal(column.data_type, "bigint");
+        }
 
         const statusColumn = await client.query(
           `SELECT is_nullable, column_default
