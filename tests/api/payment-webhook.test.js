@@ -18,8 +18,21 @@ const {
 } = require("../helpers/api");
 
 const supabase = require("../../src/config/supabase");
+const orderStatusService = require("../../src/services/orderStatusService");
 
 const dbTest = (name, fn) => test(name, { skip: !runDbTests }, fn);
+
+const PNG_BYTES = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d,
+]);
+const JPEG_BYTES = Buffer.from([
+  0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
+]);
+const WEBP_BYTES = Buffer.concat([
+  Buffer.from("RIFF"),
+  Buffer.from([0x1a, 0x00, 0x00, 0x00]),
+  Buffer.from("WEBPVP8 "),
+]);
 
 let closeServer;
 let baseUrl;
@@ -32,11 +45,15 @@ const productIds = [];
 const userIds = [];
 const storageMock = { uploaded: null, removed: [], signedUrlRequest: null };
 
-function proofForm(fileName = "proof.png", type = "image/png") {
+function proofForm(
+  fileName = "proof.png",
+  type = "image/png",
+  bytes = PNG_BYTES,
+) {
   const formData = new FormData();
   formData.append(
     "proof_image",
-    new Blob([Buffer.from("fake-image-bytes")], { type }),
+    new Blob([bytes], { type }),
     fileName,
   );
   return formData;
@@ -204,11 +221,185 @@ dbTest("upload bukti bayar valid mengubah status ke PROCESSING", async () => {
   assert.equal(response.body.data.payment_proof_url, storageMock.uploaded.fileName);
   assert.equal(storageMock.uploaded.bucket, "payment-proofs");
   assert.equal(storageMock.uploaded.options.contentType, "image/png");
+  assert.match(storageMock.uploaded.fileName, /^proof_\d+_\d+\.png$/);
   assert.ok(response.body.data.payment_submitted_at);
 
   const stored = await getOrder(order.id);
   assert.equal(stored.status, "PROCESSING");
   assert.equal(stored.payment_proof_url, storageMock.uploaded.fileName);
+});
+
+dbTest("ekstensi file mengikuti MIME terdeteksi, bukan originalname", async () => {
+  const order = await createOrderWithItems({
+    userId: user.id,
+    productId: product.id,
+    quantity: 1,
+    price: 10000,
+    stock: 9,
+  });
+
+  storageMock.uploaded = null;
+
+  const response = await request(baseUrl, `/api/orders/${order.id}/pay`, {
+    method: "POST",
+    token: userToken,
+    formData: proofForm("payload.php", "image/jpeg", JPEG_BYTES),
+  });
+
+  assert.equal(response.status, 200);
+  assert.match(storageMock.uploaded.fileName, /^proof_\d+_\d+\.jpg$/);
+  assert.equal(storageMock.uploaded.options.contentType, "image/jpeg");
+});
+
+dbTest("upload bukti bayar menerima WebP valid", async () => {
+  const order = await createOrderWithItems({
+    userId: user.id,
+    productId: product.id,
+    quantity: 1,
+    price: 10000,
+    stock: 9,
+  });
+
+  storageMock.uploaded = null;
+
+  const response = await request(baseUrl, `/api/orders/${order.id}/pay`, {
+    method: "POST",
+    token: userToken,
+    formData: proofForm("bukti.webp", "image/webp", WEBP_BYTES),
+  });
+
+  assert.equal(response.status, 200);
+  assert.match(storageMock.uploaded.fileName, /^proof_\d+_\d+\.webp$/);
+  assert.equal(storageMock.uploaded.options.contentType, "image/webp");
+});
+
+dbTest("upload file dengan isi palsu ditolak 400", async () => {
+  const order = await createOrderWithItems({
+    userId: user.id,
+    productId: product.id,
+    quantity: 1,
+    price: 10000,
+    stock: 9,
+  });
+
+  storageMock.uploaded = null;
+
+  const response = await request(baseUrl, `/api/orders/${order.id}/pay`, {
+    method: "POST",
+    token: userToken,
+    formData: proofForm(
+      "palsu.png",
+      "image/png",
+      Buffer.from("fake-image-bytes"),
+    ),
+  });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.message, /tidak valid/i);
+  assert.equal(storageMock.uploaded, null);
+  assert.equal((await getOrder(order.id)).status, "PENDING");
+});
+
+dbTest("upload file dengan tipe dan isi tidak cocok ditolak 400", async () => {
+  const order = await createOrderWithItems({
+    userId: user.id,
+    productId: product.id,
+    quantity: 1,
+    price: 10000,
+    stock: 9,
+  });
+
+  const response = await request(baseUrl, `/api/orders/${order.id}/pay`, {
+    method: "POST",
+    token: userToken,
+    formData: proofForm("salah.png", "image/jpeg", PNG_BYTES),
+  });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.message, /tidak sesuai/i);
+  assert.equal((await getOrder(order.id)).status, "PENDING");
+});
+
+dbTest("upload SVG ditolak 400", async () => {
+  const order = await createOrderWithItems({
+    userId: user.id,
+    productId: product.id,
+    quantity: 1,
+    price: 10000,
+    stock: 9,
+  });
+
+  const response = await request(baseUrl, `/api/orders/${order.id}/pay`, {
+    method: "POST",
+    token: userToken,
+    formData: proofForm(
+      "vektor.svg",
+      "image/svg+xml",
+      Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'),
+    ),
+  });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.message, /JPEG, PNG, atau WebP/i);
+  assert.equal((await getOrder(order.id)).status, "PENDING");
+});
+
+dbTest("upload file melebihi 2MB ditolak 400", async () => {
+  const order = await createOrderWithItems({
+    userId: user.id,
+    productId: product.id,
+    quantity: 1,
+    price: 10000,
+    stock: 9,
+  });
+
+  const oversized = Buffer.alloc(2 * 1024 * 1024 + 1, 0x00);
+  PNG_BYTES.copy(oversized);
+
+  const response = await request(baseUrl, `/api/orders/${order.id}/pay`, {
+    method: "POST",
+    token: userToken,
+    formData: proofForm("besar.png", "image/png", oversized),
+  });
+
+  assert.equal(response.status, 400);
+  assert.match(response.body.message, /terlalu besar/i);
+  assert.equal((await getOrder(order.id)).status, "PENDING");
+});
+
+dbTest("file dihapus jika update database gagal setelah upload", async () => {
+  const order = await createOrderWithItems({
+    userId: user.id,
+    productId: product.id,
+    quantity: 1,
+    price: 10000,
+    stock: 9,
+  });
+
+  storageMock.uploaded = null;
+  storageMock.removed = [];
+
+  const originalChangeOrderStatus = orderStatusService.changeOrderStatus;
+  orderStatusService.changeOrderStatus = async () => {
+    const error = new Error("Simulasi gagal update database");
+    error.statusCode = 400;
+    throw error;
+  };
+
+  try {
+    const response = await request(baseUrl, `/api/orders/${order.id}/pay`, {
+      method: "POST",
+      token: userToken,
+      formData: proofForm("cleanup.png"),
+    });
+
+    assert.equal(response.status, 400);
+    assert.ok(storageMock.uploaded);
+    assert.deepEqual(storageMock.removed, [storageMock.uploaded.fileName]);
+    assert.equal((await getOrder(order.id)).status, "PENDING");
+  } finally {
+    orderStatusService.changeOrderStatus = originalChangeOrderStatus;
+  }
 });
 
 dbTest("upload bukti bayar kedua ditolak karena bukan PENDING", async () => {

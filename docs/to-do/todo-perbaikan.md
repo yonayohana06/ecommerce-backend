@@ -363,6 +363,8 @@ Hasil: `npm test` 44 pass + 108 skip (152 total), `npm run test:db` 152/152 lulu
 
 **Temuan:** 4.2.8.
 
+**Progres 8 November 2026:** selesai. `uploadMiddleware` memakai allowlist `image/jpeg`, `image/png`, `image/webp`; SVG dan tipe lain ditolak. Middleware `validateImageSignature` memeriksa magic bytes (PNG `89 50 4E 47`, JPEG `FF D8 FF`, WebP `RIFF....WEBP`) dan menolak file yang isinya tidak cocok dengan MIME yang dikirim client. Nama file memakai ekstensi dari MIME terdeteksi (`jpg`/`png`/`webp`), bukan `originalname`. Upload tetap dilakukan di luar transaksi DB, lalu `orderStatusService.changeOrderStatus` memakai `requiredStatus: PENDING` dan mengecek ulang status di dalam transaksi. Jika update DB gagal, file hasil upload dihapus dari Storage. Error Multer sudah ditangani global error handler (termasuk `LIMIT_FILE_SIZE`).
+
 **Estimasi:** M
 
 **Files:**
@@ -372,21 +374,28 @@ Hasil: `npm test` 44 pass + 108 skip (152 total), `npm run test:db` 152/152 lulu
 - `tests/payment/*`
 
 **Langkah:**
-- [ ] Allowlist MIME: `image/jpeg`, `image/png`, `image/webp`.
-- [ ] Validasi magic bytes, bukan hanya `mimetype` dari client.
-- [ ] Tolak SVG dan file non-image.
-- [ ] Gunakan ekstensi berdasarkan MIME yang tervalidasi, bukan `originalname`.
-- [ ] Upload ke storage di luar transaksi DB; jika update DB gagal, hapus file.
-- [ ] Pastikan order tetap PENDING sebelum update dan re-check di dalam transaksi.
-- [ ] Tangani error Multer melalui global error handler.
-- [ ] Tambahkan test file valid, file palsu, file terlalu besar, dan SVG.
-- [ ] Tambahkan cleanup untuk file orphan.
+- [x] Allowlist MIME: `image/jpeg`, `image/png`, `image/webp`.
+- [x] Validasi magic bytes, bukan hanya `mimetype` dari client.
+- [x] Tolak SVG dan file non-image.
+- [x] Gunakan ekstensi berdasarkan MIME yang tervalidasi, bukan `originalname`.
+- [x] Upload ke storage di luar transaksi DB; jika update DB gagal, hapus file.
+- [x] Pastikan order tetap PENDING sebelum update dan re-check di dalam transaksi.
+- [x] Tangani error Multer melalui global error handler.
+- [x] Tambahkan test file valid, file palsu, file terlalu besar, dan SVG.
+- [x] Tambahkan cleanup untuk file orphan.
 
 **Definition of Done:**
-- [ ] Hanya JPEG/PNG/WebP valid yang diterima.
-- [ ] File berbahaya ditolak dengan 400 JSON.
-- [ ] Tidak ada file orphan saat DB gagal.
-- [ ] Test upload lulus.
+- [x] Hanya JPEG/PNG/WebP valid yang diterima.
+- [x] File berbahaya ditolak dengan 400 JSON.
+- [x] Tidak ada file orphan saat DB gagal.
+- [x] Test upload lulus.
+
+**Verifikasi:**
+```bash
+npm run test:db -- tests/api/payment-webhook.test.js
+```
+
+Hasil: `npm test` 44 pass + 115 skip (159 total), `npm run test:db` 159/159 lulus, coverage 82,18% lines / 77,41% branches / 87,91% functions, `npm run lint` OK untuk 74 file, `npm audit --omit=dev` 0 vulnerabilities.
 
 ### P1-03: Terapkan state machine status pesanan
 

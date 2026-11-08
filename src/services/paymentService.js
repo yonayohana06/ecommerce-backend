@@ -44,13 +44,23 @@ const submitPaymentProof = async (userId, orderId, file) => {
     throw error;
   }
 
-  const fileExt = file.originalname.split(".").pop();
+  // Gunakan ekstensi dari MIME yang sudah divalidasi magic bytes,
+  // bukan dari originalname yang dikendalikan client.
+  const fileExt = file.extension;
+  const contentType = file.detectedMime;
+
+  if (!fileExt || !contentType) {
+    const error = new Error("File bukti pembayaran tidak valid");
+    error.statusCode = 400;
+    throw error;
+  }
+
   const fileName = `proof_${orderId}_${Date.now()}.${fileExt}`;
 
   const { error: storageError } = await supabase.storage
     .from("payment-proofs")
     .upload(fileName, file.buffer, {
-      contentType: file.mimetype,
+      contentType,
       upsert: true,
     });
 

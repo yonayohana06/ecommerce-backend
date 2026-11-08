@@ -6,7 +6,10 @@ const {
   verifyUserToken,
 } = require("../middlewares/authMiddleware");
 const validate = require("../middlewares/validate");
-const upload = require("../middlewares/uploadMiddleware");
+const {
+  upload,
+  validateImageSignature,
+} = require("../middlewares/uploadMiddleware");
 const { uploadLimiter } = require("../middlewares/rateLimit");
 const {
   orderIdParams,
@@ -44,6 +47,7 @@ router.post(
   uploadLimiter,
   validate({ params: orderIdParams }),
   upload.single("proof_image"),
+  validateImageSignature,
   paymentController.uploadPaymentProof,
 );
 

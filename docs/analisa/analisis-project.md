@@ -184,6 +184,8 @@ Selain itu:
 
 **Rekomendasi:** allowlist `image/jpeg`, `image/png`, `image/webp`; validasi magic bytes; generate nama file aman; upload di luar transaksi DB atau sediakan cleanup; tangani error Multer.
 
+**Update 8 November 2026:** selesai. `uploadMiddleware` hanya menerima `image/jpeg`, `image/png`, dan `image/webp`; SVG dan tipe non-image ditolak 400. `validateImageSignature` memeriksa magic bytes dan menolak file yang isinya tidak cocok dengan MIME dari client. Nama file memakai ekstensi dari MIME terdeteksi, bukan `originalname`. Upload dilakukan di luar transaksi DB; `orderStatusService.changeOrderStatus` mengecek ulang status `PENDING` di dalam transaksi, dan file dihapus dari Storage jika update DB gagal. Error Multer (termasuk `LIMIT_FILE_SIZE`) ditangani global error handler. Test upload bertambah menjadi 19 kasus; seluruh suite 159/159 lulus dengan coverage 82,18% lines / 77,41% branches / 87,91% functions.
+
 #### 9. State machine pesanan tidak divalidasi
 
 Admin dapat mengubah status dari status apa pun ke status apa pun, misalnya `COMPLETED → CANCELLED`, `PAID → PENDING`, atau `PENDING → SHIPPED`. Webhook juga bisa melakukan hal serupa.
@@ -258,7 +260,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 ### P1 — Minggu Ini
 
 - ~~Perbaiki cart untuk produk nonaktif dan validasi add-to-cart.~~ (sudah dikerjakan)
-- Hardening upload (allowlist, magic bytes, cleanup).
+- ~~Hardening upload (allowlist, magic bytes, cleanup).~~ (sudah dikerjakan)
 - Pisahkan `app.js` dan `server.js` untuk serverless.
 - ~~Tambahkan constraint skema dan index yang hilang.~~ (sudah dikerjakan; sisa `bigint` dan unique `LOWER(email)`).
 - Samakan format numeric di response API.
@@ -279,6 +281,6 @@ Fondasi project ini sudah cukup baik: struktur rapi, SQL aman, checkout transaks
 
 1. **Migrasi database yang tidak sinkron.** *(Sudah diperbaiki; migration integritas dan fresh-install test lulus.)*
 2. **Inkonsistensi stok di webhook.** *(Sudah diperbaiki; satu service transaksional untuk admin, webhook, dan upload bukti bayar.)*
-3. **Tidak adanya automated test.** *(Sudah diperbaiki; 152 test + CI lint/test/coverage dan migrasi dari database kosong.)*
+3. **Tidak adanya automated test.** *(Sudah diperbaiki; 159 test + CI lint/test/coverage dan migrasi dari database kosong.)*
 
 Setelah itu, hardening keamanan dan perbaikan deployment serverless bisa dilakukan bertahap.
