@@ -703,12 +703,46 @@ Hasil: 11 tes P2-01 lulus. `npm test` 91 pass + 124 skip (215 total), `npm run t
 
 **Temuan:** Tidak ada jejak perubahan admin.
 
-**Files:** migration baru, service audit, endpoint admin.
+**Progres 16 November 2026:** selesai. Migrasi `1794840506186_create-audit-logs.js` membuat tabel `audit_logs` (`actor_id`, `actor_email`, `action`, `entity_type`, `entity_id`, `before_data`, `after_data`, `ip_address`, `created_at`) dengan index `created_at`, `(entity_type, entity_id)`, dan `actor_id`. `src/services/auditLogService.js` menyediakan `recordAuditLog` (best-effort; kegagalan tidak membatalkan aksi utama dan dicatat ke log server), `createAuditLog`, dan `listAuditLogs` (pagination + filter). Perekaman dipasang di controller admin: `product.create/update/delete`, `category.create/update/delete`, dan `order.status.update` (dengan before/after status). Endpoint `GET /api/admin/audit-logs` (admin-only) mendukung `page`, `limit`, `entity_type`, `action`, dan `actor_id`.
 
-- [ ] Buat tabel `audit_logs` (actor, action, entity, before/after, IP, timestamp).
-- [ ] Catat perubahan status order, CRUD produk, dan CRUD kategori.
-- [ ] Tambahkan endpoint admin untuk melihat audit log dengan pagination.
-- [ ] Tambahkan test.
+**Files:**
+- `migrations/1794840506186_create-audit-logs.js` (baru)
+- `src/services/auditLogService.js` (baru)
+- `src/controllers/adminAuditLogController.js` (baru)
+- `src/routes/adminAuditLogRoutes.js` (baru)
+- `src/validation/auditLogSchemas.js` (baru)
+- `src/controllers/adminProductController.js`
+- `src/controllers/adminCategoryController.js`
+- `src/controllers/paymentController.js`
+- `src/services/paymentService.js`
+- `src/routes/index.js`
+- `tests/services/auditLogService.test.js` (baru)
+- `tests/api/audit-log.test.js` (baru)
+- `tests/helpers/api.js`
+- `tests/db/migration.test.js`
+
+**Langkah:**
+- [x] Buat tabel `audit_logs` (actor, action, entity, before/after, IP, timestamp).
+- [x] Catat perubahan status order, CRUD produk, dan CRUD kategori.
+- [x] Tambahkan endpoint admin untuk melihat audit log dengan pagination.
+- [x] Tambahkan test.
+
+**Definition of Done:**
+- [x] Tabel `audit_logs` tersedia dengan index yang memadai.
+- [x] Semua aksi admin yang diminta tercatat beserta aktor dan IP.
+- [x] Endpoint admin pagination + filter tersedia dan menolak non-admin.
+- [x] Test service + API lulus.
+
+**Verifikasi:**
+```bash
+npm test
+npm run test:db
+npm run test:coverage
+npm run lint
+npm audit --omit=dev
+```
+
+Hasil: 14 tes P2-02 lulus (4 service + 10 API). `npm test` 91 pass + 138 skip (229 total), `npm run test:db` 229/229 lulus, coverage 88,94% lines / 77,41% branches / 93,33% functions, `npm run lint` OK untuk 96 file, `npm audit --omit=dev` 0 vulnerabilities, `git diff --check` bersih.
 
 ### P2-03: Dokumentasi OpenAPI/Swagger
 

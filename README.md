@@ -26,6 +26,7 @@ ECOMMERCE-BACKEND/
 │   ├── constants/
 │   │   └── orderStatus.js            # Enum status pesanan (PENDING, PAID, PROCESSING, dll)
 │   ├── controllers/
+│   │   ├── adminAuditLogController.js # Daftar audit log aksi admin (pagination + filter)
 │   │   ├── adminAuthController.js    # Autentikasi dan login khusus administrator
 │   │   ├── adminCategoryController.js # Manajemen kategori oleh admin (CRUD)
 │   │   ├── adminProductController.js  # Manajemen produk oleh admin (CRUD + Smart Delete)
@@ -42,6 +43,7 @@ ECOMMERCE-BACKEND/
 │   │   ├── uploadMiddleware.js       # Konfigurasi Multer memory storage (gambar, maks 2MB)
 │   │   └── verifySignature.js        # Verifikasi SHA-512 hash signature payment gateway
 │   ├── routes/
+│   │   ├── adminAuditLogRoutes.js    # Endpoint audit log admin (/api/admin/audit-logs)
 │   │   ├── adminAuthRoutes.js        # Endpoint auth admin (/api/admin/auth)
 │   │   ├── adminCategoryRoutes.js    # Endpoint admin kategori (/api/admin/categories)
 │   │   ├── adminProductRoutes.js     # Endpoint admin produk (/api/admin/products)
@@ -54,6 +56,7 @@ ECOMMERCE-BACKEND/
 │   │   └── productRoutes.js          # Endpoint produk publik (/api/products)
 │   ├── services/
 │   │   ├── adminAuthService.js       # Logika auth admin, token khusus admin
+│   │   ├── auditLogService.js        # Pencatatan & pembacaan audit log admin
 │   │   ├── authService.js            # Hashing Bcrypt, otentikasi user, pembuatan JWT
 │   │   ├── cartService.js            # Logika keranjang belanja (Upsert & validasi stok)
 │   │   ├── categoryService.js        # Logika kategori, auto-slugify, pencegahan duplikasi
@@ -270,6 +273,11 @@ Base URL: `http://localhost:3001/api`
 | `GET` | `/api/admin/orders` | Admin | Mengambil daftar pesanan dengan filter status, pencarian (order ID / email user), pagination, dan signed URL bukti transfer. |
 | `GET` | `/api/admin/orders/:orderId` | Admin | Mengambil detail lengkap pesanan spesifik, data customer, item produk, dan signed URL bukti transfer. |
 | `PATCH` | `/api/admin/orders/:orderId/status` | Admin | Mengubah status pesanan sesuai transisi yang valid. Mengembalikan stok otomatis jika dibatalkan, atau memotong stok kembali jika pesanan batal diaktifkan kembali. |
+
+### 🧾 10.1 Audit Log Admin — `/api/admin/audit-logs`
+| Method | Endpoint | Akses | Deskripsi |
+| :---: | :--- | :---: | :--- |
+| `GET` | `/api/admin/audit-logs` | Admin | Mengambil jejak aksi admin (status order, CRUD produk, CRUD kategori) dengan `before`/`after`, aktor, IP, dan waktu. Mendukung pagination (`page`, `limit`) serta filter `entity_type`, `action`, dan `actor_id`. |
 
 ### 💳 11. Webhook Payment Gateway — `/api/orders/webhook/payment`
 | Method | Endpoint | Akses | Deskripsi |

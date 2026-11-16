@@ -46,6 +46,7 @@ const changeOrderStatusByAdmin = async (req, res, next) => {
     const updatedOrder = await paymentService.updateOrderStatus(
       orderId,
       status,
+      { actor: req.user, ipAddress: req.ip },
     );
 
     return res.status(200).json({

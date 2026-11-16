@@ -1,4 +1,5 @@
 const categoryService = require("../services/categoryService");
+const auditLogService = require("../services/auditLogService");
 
 const getCategoryList = async (req, res, next) => {
   try {
@@ -62,6 +63,15 @@ const createCategory = async (req, res, next) => {
       icon_url,
     });
 
+    await auditLogService.recordAuditLog({
+      actor: req.user,
+      action: "category.create",
+      entityType: "category",
+      entityId: newCategory.id,
+      after: newCategory,
+      ipAddress: req.ip,
+    });
+
     return res.status(201).json({
       code: 201,
       message: "Berhasil menambahkan kategori baru",
@@ -83,6 +93,7 @@ const updateCategory = async (req, res, next) => {
       });
     }
 
+    const beforeCategory = await categoryService.getCategoryById(id);
     const updatedCategory = await categoryService.updateCategory(id, req.body);
 
     if (!updatedCategory) {
@@ -91,6 +102,16 @@ const updateCategory = async (req, res, next) => {
         message: "Kategori tidak ditemukan",
       });
     }
+
+    await auditLogService.recordAuditLog({
+      actor: req.user,
+      action: "category.update",
+      entityType: "category",
+      entityId: id,
+      before: beforeCategory,
+      after: updatedCategory,
+      ipAddress: req.ip,
+    });
 
     return res.status(200).json({
       code: 200,
@@ -113,6 +134,7 @@ const deleteCategory = async (req, res, next) => {
       });
     }
 
+    const beforeCategory = await categoryService.getCategoryById(id);
     const result = await categoryService.deleteCategory(id);
 
     if (!result) {
@@ -121,6 +143,19 @@ const deleteCategory = async (req, res, next) => {
         message: "Kategori tidak ditemukan",
       });
     }
+
+    await auditLogService.recordAuditLog({
+      actor: req.user,
+      action: "category.delete",
+      entityType: "category",
+      entityId: id,
+      before: beforeCategory,
+      after: {
+        delete_type: "deleted",
+        affected_products_count: result.affected_products_count,
+      },
+      ipAddress: req.ip,
+    });
 
     const affected = result.affected_products_count;
     const infoMessage =

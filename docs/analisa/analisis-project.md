@@ -199,7 +199,9 @@ PENDING/PROCESSING → CANCELLED/FAILED
 
 Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
-**Update 8 November 2026:** selesai. `src/services/orderStatusService.js` menjadi satu-satunya jalur perubahan status untuk admin, webhook, dan upload bukti bayar. Transisi valid: `PENDING → PROCESSING/PAID/CANCELLED/FAILED`, `PROCESSING → PAID/CANCELLED/FAILED`, `PAID → SHIPPED`, `SHIPPED → COMPLETED`, serta revert `CANCELLED/FAILED → PAID`; transisi lain ditolak 400. Perubahan status dan penyesuaian stok berjalan dalam satu transaksi, dan status yang sama bersifat idempotent. Test matriks mencakup seluruh 7×7 pasangan status. Audit log perubahan status masih tercatat sebagai item P2.
+**Update 8 November 2026:** selesai. `src/services/orderStatusService.js` menjadi satu-satunya jalur perubahan status untuk admin, webhook, dan upload bukti bayar. Transisi valid: `PENDING → PROCESSING/PAID/CANCELLED/FAILED`, `PROCESSING → PAID/CANCELLED/FAILED`, `PAID → SHIPPED`, `SHIPPED → COMPLETED`, serta revert `CANCELLED/FAILED → PAID`; transisi lain ditolak 400. Perubahan status dan penyesuaian stok berjalan dalam satu transaksi, dan status yang sama bersifat idempotent. Test matriks mencakup seluruh 7×7 pasangan status.
+
+**Update 16 November 2026:** audit log perubahan status selesai (P2-02). `paymentService.updateOrderStatus` mencatat `order.status.update` dengan `before`/`after` status, aktor, dan IP melalui `auditLogService`.
 
 #### 10. Pola deployment Vercel kurang cocok dengan kode saat ini
 
@@ -277,8 +279,8 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 ### P2 — Berikutnya
 
-- Audit log admin, refresh token/revocation.
-- Batch signed URL/caching.
+- ~~Audit log admin, refresh token/revocation.~~ (audit log admin selesai 16 November 2026; refresh token/revocation belum)
+- ~~Batch signed URL/caching.~~ (selesai)
 - OpenAPI/Swagger.
 - Structured logging, metrics, tracing.
 - Migrasi bertahap ke TypeScript jika project akan terus berkembang.

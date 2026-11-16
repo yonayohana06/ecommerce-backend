@@ -4,6 +4,7 @@ const supabase = require("../config/supabase");
 const ORDER_STATUS = require("../constants/orderStatus");
 const orderStatusService = require("./orderStatusService");
 const { signedUrlCache } = require("../utils/signedUrlCache");
+const auditLogService = require("./auditLogService");
 
 const SIGNED_URL_EXPIRES_IN = 3600; // 60 menit
 
@@ -155,12 +156,13 @@ const submitPaymentProof = async (userId, orderId, file) => {
 };
 
 // Admin Verifikasi Status Order
-const updateOrderStatus = async (orderId, newStatus) => {
-  const { order } = await orderStatusService.changeOrderStatus({
-    orderId,
-    newStatus,
-    source: "admin",
-  });
+const updateOrderStatus = async (orderId, newStatus, auditContext = null) => {
+  const { order, changed, previousStatus } =
+    await orderStatusService.changeOrderStatus({
+      orderId,
+      newStatus,
+      source: "admin",
+    });
 
   const updatedOrder = { ...order };
 
@@ -168,6 +170,18 @@ const updateOrderStatus = async (orderId, newStatus) => {
     updatedOrder.payment_proof_url = await generateSignedUrl(
       updatedOrder.payment_proof_url,
     );
+  }
+
+  if (changed && auditContext) {
+    await auditLogService.recordAuditLog({
+      actor: auditContext.actor,
+      action: "order.status.update",
+      entityType: "order",
+      entityId: orderId,
+      before: { status: previousStatus },
+      after: { status: newStatus },
+      ipAddress: auditContext.ipAddress,
+    });
   }
 
   return serializeOrder(updatedOrder);

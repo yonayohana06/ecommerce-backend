@@ -1,4 +1,5 @@
 const productService = require("../services/productService");
+const auditLogService = require("../services/auditLogService");
 
 const getProductList = async (req, res, next) => {
   try {
@@ -66,6 +67,15 @@ const createProduct = async (req, res, next) => {
 
     const newProduct = await productService.createProduct(req.body);
 
+    await auditLogService.recordAuditLog({
+      actor: req.user,
+      action: "product.create",
+      entityType: "product",
+      entityId: newProduct.id,
+      after: newProduct,
+      ipAddress: req.ip,
+    });
+
     return res.status(201).json({
       code: 201,
       message: "Berhasil menambahkan produk",
@@ -87,6 +97,7 @@ const updateProduct = async (req, res, next) => {
       });
     }
 
+    const beforeProduct = await productService.getProductByIdAdmin(id);
     const updatedProduct = await productService.updateProduct(id, req.body);
 
     if (!updatedProduct) {
@@ -95,6 +106,16 @@ const updateProduct = async (req, res, next) => {
         message: "Produk tidak ditemukan",
       });
     }
+
+    await auditLogService.recordAuditLog({
+      actor: req.user,
+      action: "product.update",
+      entityType: "product",
+      entityId: id,
+      before: beforeProduct,
+      after: updatedProduct,
+      ipAddress: req.ip,
+    });
 
     return res.status(200).json({
       code: 200,
@@ -117,6 +138,7 @@ const deleteProduct = async (req, res, next) => {
       });
     }
 
+    const beforeProduct = await productService.getProductByIdAdmin(id);
     const result = await productService.deleteProduct(id);
 
     if (!result) {
@@ -125,6 +147,16 @@ const deleteProduct = async (req, res, next) => {
         message: "Produk tidak ditemukan",
       });
     }
+
+    await auditLogService.recordAuditLog({
+      actor: req.user,
+      action: "product.delete",
+      entityType: "product",
+      entityId: id,
+      before: beforeProduct,
+      after: result,
+      ipAddress: req.ip,
+    });
 
     const isSoftDelete = result.delete_type === "soft_deleted";
 

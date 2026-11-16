@@ -196,6 +196,9 @@ async function cleanup({
   categoryIds = [],
 } = {}) {
   if (userIds.length > 0) {
+    await db.query("DELETE FROM audit_logs WHERE actor_id = ANY($1::bigint[])", [
+      userIds,
+    ]);
     await db.query("DELETE FROM orders WHERE user_id = ANY($1::bigint[])", [
       userIds,
     ]);

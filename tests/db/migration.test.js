@@ -70,6 +70,7 @@ test(
           "orders",
           "order_items",
           "cart_items",
+          "audit_logs",
           "pgmigrations",
         ]) {
           assert.ok(
@@ -81,7 +82,7 @@ test(
         const migrations = await client.query(
           "SELECT name FROM pgmigrations ORDER BY id",
         );
-        assert.equal(migrations.rowCount, 7);
+        assert.equal(migrations.rowCount, 8);
 
         const emailIndex = await client.query(
           `SELECT indexdef
