@@ -748,12 +748,46 @@ Hasil: 14 tes P2-02 lulus (4 service + 10 API). `npm test` 91 pass + 138 skip (2
 
 **Temuan:** Dokumentasi API masih berupa README.
 
-**Files:** `docs/openapi.yaml`, route docs.
+**Progres 16 November 2026:** selesai. `docs/openapi.yaml` (OpenAPI 3.0.3, 38 operasi: 35 endpoint API + 3 health) menjadi sumber kebenaran kontrak request, response, auth, dan error. Swagger UI tersedia di `/api/docs`, spec JSON di `/api/docs/openapi.json`, dan YAML di `/api/docs/openapi.yaml`; seluruh route docs hanya dipasang saat `NODE_ENV !== "production"`. Dependency `swagger-ui-express`, `yaml`, dan `@apidevtools/swagger-parser` hanya `devDependencies` dan dimuat secara lazy. CSP khusus route docs dipasang setelah header CSP global Helmet dihapus agar inline script Swagger UI berjalan tanpa melonggarkan CSP global. `npm run docs:validate` memvalidasi spec dan dijalankan di CI. `tests/docs/openapi.test.js` memastikan daftar operasi sama persis dengan route Express, memeriksa matriks auth/error, dan menolak contoh JWT/service role. Tes juga memuat `src/app` dalam mode production untuk memastikan setiap router yang ter-mount terdaftar, sehingga router baru atau route langsung di `app.js` tidak lolos tanpa pembaruan spec.
 
-- [ ] Dokumentasikan seluruh endpoint, auth, request, response, dan error.
-- [ ] Sajikan Swagger UI di environment non-production atau di balik auth.
-- [ ] Validasi spec di CI.
-- [ ] Tambahkan contoh penggunaan.
+**Files:**
+- `docs/openapi.yaml` (baru)
+- `docs/superpowers/specs/2026-11-16-openapi-swagger-design.md` (baru)
+- `docs/superpowers/plans/2026-11-16-openapi-swagger.md` (baru)
+- `src/docs/apiDocs.js` (baru)
+- `src/app.js`
+- `scripts/validate-openapi.js` (baru)
+- `tests/docs/apiDocs.test.js` (baru)
+- `tests/docs/openapi.test.js` (baru)
+- `package.json`
+- `package-lock.json`
+- `.github/workflows/test.yml`
+- `README.md`
+
+**Langkah:**
+- [x] Dokumentasikan seluruh endpoint, auth, request, response, dan error.
+- [x] Sajikan Swagger UI di environment non-production atau di balik auth.
+- [x] Validasi spec di CI.
+- [x] Tambahkan contoh penggunaan.
+
+**Definition of Done:**
+- [x] Seluruh 38 operasi terdokumentasi dengan `operationId` unik, tag, dan response.
+- [x] Swagger UI/JSON/YAML hanya tersedia di non-production; production tidak memasang route docs.
+- [x] Spec tervalidasi dan sinkron dengan route Express lewat tes exact-set.
+- [x] README memuat cara akses, validasi, dan contoh `curl`.
+- [x] Tidak ada dependency produksi baru; audit tetap bersih.
+
+**Verifikasi:**
+```bash
+npm test
+npm run test:db
+npm run test:coverage
+npm run lint
+npm run docs:validate
+npm audit --omit=dev
+```
+
+Hasil: 20 tes docs lulus (6 `apiDocs` + 14 `openapi`). `npm test` 111 pass + 138 skip (249 total), `npm run test:db` 249/249 lulus, coverage 89,13% lines / 77,63% branches / 93,48% functions, `npm run lint` OK untuk 100 file, `npm run docs:validate` mencetak `OpenAPI valid`, `npm audit --omit=dev` 0 vulnerabilities, `git diff --check` bersih. Final review fresh-context menemukan satu celah guard (router baru di luar daftar hardcoded); sudah diperbaiki dengan introspeksi `src/app`, dan drift router/route langsung terbukti menggagalkan tes.
 
 ### P2-04: Migrasi bertahap ke TypeScript
 

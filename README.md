@@ -13,16 +13,28 @@ ECOMMERCE-BACKEND/
 ├── .env.example                      # Template variabel environment tanpa secret
 ├── .github/
 │   └── workflows/
-│       └── deploy.yml                # CI/CD: Otomatisasi migrasi database ke Supabase/Production
+│       ├── deploy.yml                # CI/CD: Otomatisasi migrasi database ke Supabase/Production
+│       └── test.yml                  # CI: lint, validasi OpenAPI, test non-DB, test DB + coverage
+├── docs/
+│   ├── openapi.yaml                  # Kontrak OpenAPI 3.0.3 (38 operasi, sumber kebenaran)
+│   ├── analisa/                      # Analisis project
+│   ├── superpowers/                  # Spec dan rencana implementasi
+│   └── to-do/                        # Checklist perbaikan
 ├── migrations/                       # Skrip migrasi DDL database (node-pg-migrate)
 │   ├── ..._init-ecommerce-schema.js
 │   ├── ..._add-role-to-users.js
 │   ├── ..._table-cart-items.js
-│   └── ..._add-payment-proof-to-orders.js
+│   ├── ..._add-payment-proof-to-orders.js
+│   ├── ..._align-cart-items-bigint.js
+│   └── ..._create-audit-logs.js
+├── scripts/
+│   └── validate-openapi.js           # Validasi docs/openapi.yaml untuk lokal dan CI
 ├── src/
 │   ├── config/
 │   │   ├── db.js                     # Pool PostgreSQL (max via DB_POOL_MAX, pool.on error)
 │   │   └── supabase.js               # Client Supabase Storage untuk upload file bukti transfer
+│   ├── docs/
+│   │   └── apiDocs.js                # Router Swagger UI/JSON/YAML, hanya non-production
 │   ├── constants/
 │   │   └── orderStatus.js            # Enum status pesanan (PENDING, PAID, PROCESSING, dll)
 │   ├── controllers/
@@ -68,6 +80,11 @@ ECOMMERCE-BACKEND/
 │   │   └── serializers.js            # Konversi numeric PostgreSQL ke number response
 │   ├── app.js                        # Express app murni (tanpa listener)
 │   └── server.js                     # Entry point lokal: listener, cek DB, graceful shutdown
+├── tests/
+│   ├── docs/
+│   │   ├── apiDocs.test.js           # Gating, route docs, dan CSP
+│   │   └── openapi.test.js           # Validasi spec, sync route, matriks auth
+│   └── ...                           # Test API, service, middleware, dan DB
 ├── .env                              # Variabel lingkungan/environment (tidak di-commit)
 ├── .gitignore
 ├── package-lock.json
@@ -83,14 +100,14 @@ ECOMMERCE-BACKEND/
 Sistem memisahkan secara ketat alur autentikasi dan otorisasi antara **Pelanggan Biasa** dan **Administrator**:
 * **Portal Pelanggan (`/api/auth`)**:
   * Pendaftaran publik (`/register`) otomatis menetapkan `role: 'user'`.
-  * Login pelanggan (`/login`) menolak akun dengan `role: 'admin'` (`403 Forbidden`) agar admin tidak dapat login di portal belanja pelanggan.
+  * Login pelanggan (`/login`) menolak akun dengan `role: 'admin'` maupun kredensial salah menggunakan respons generik `401 Unauthorized` agar role akun tidak dapat dienumerasi.
   * Token ditandatangani dengan `JWT_SECRET` (default durasi: **1 hari**).
   * Proteksi endpoint pelanggan menggunakan middleware `verifyUserToken`.
 * **Portal Administrator (`/api/admin/auth`)**:
   * **Tidak memiliki endpoint registrasi publik**. Akun admin dibuat secara internal (seeder/CLI/database).
-  * Login admin (`/login`) **wajib memiliki `role: 'admin'`**; user biasa yang mencoba login akan langsung ditolak (`403 Forbidden`).
+  * Login admin (`/login`) **wajib memiliki `role: 'admin'`**; user biasa yang mencoba login atau kredensial salah juga menerima respons generik `401 Unauthorized`.
   * Token ditandatangani dengan `ADMIN_JWT_SECRET` (default durasi lebih singkat: **8 jam** demi keamanan).
-  * Proteksi endpoint admin menggunakan middleware `verifyAdminToken`.
+  * Proteksi endpoint admin menggunakan middleware `verifyAdminToken`. `403 Forbidden` tetap dipakai saat token valid tetapi role/type tidak sesuai pada endpoint terproteksi.
 * Password dienkripsi dengan algoritma **Bcrypt** (salt rounds = 10).
 * Token dikirim melalui HTTP Header:
   ```http
@@ -290,6 +307,55 @@ Base URL: `http://localhost:3001/api`
 
 ---
 
+## 📘 Dokumentasi API (OpenAPI)
+
+Kontrak API ditulis manual di **`docs/openapi.yaml`** (OpenAPI 3.0.3, 38 operasi) dan menjadi sumber kebenaran untuk request, response, auth, serta error. README ini tetap berguna sebagai ringkasan cepat, tetapi perubahan kontrak harus diperbarui di spec.
+
+### Akses Swagger UI
+
+Saat `NODE_ENV !== "production"` (development/test), server menyediakan:
+
+| URL | Isi |
+| :--- | :--- |
+| `http://localhost:3001/api/docs` | Swagger UI interaktif |
+| `http://localhost:3001/api/docs/openapi.json` | Spec terparse (untuk Postman/Insomnia/tooling) |
+| `http://localhost:3001/api/docs/openapi.yaml` | File YAML sumber |
+
+Route dokumentasi **tidak dipasang sama sekali** saat `NODE_ENV=production`. Dependency `swagger-ui-express`, `yaml`, dan `@apidevtools/swagger-parser` hanya `devDependencies` dan dimuat secara lazy.
+
+### Validasi spec
+
+```bash
+npm run docs:validate
+```
+
+CI (`.github/workflows/test.yml`) menjalankan langkah yang sama sebelum lint. `npm test` juga memuat tes yang memastikan daftar operasi di spec sama persis dengan route Express, sehingga route baru tanpa pembaruan spec akan menggagalkan CI.
+
+### Contoh penggunaan
+
+```bash
+# 1. Login pelanggan (token user default berlaku 1 hari)
+curl -s http://localhost:3001/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"budi@example.com","password":"Password123"}'
+
+# 2. Katalog publik (tanpa token)
+curl -s 'http://localhost:3001/api/products?page=1&limit=10'
+
+# 3. Request ber-token: lihat keranjang (ganti <user-token>)
+curl -s http://localhost:3001/api/cart \
+  -H 'Authorization: Bearer <user-token>'
+
+# 4. Login admin (token admin terpisah, default berlaku 8 jam)
+curl -s http://localhost:3001/api/admin/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"AdminPassword123"}'
+```
+
+> Gunakan token user hanya untuk endpoint pelanggan dan token admin hanya untuk endpoint `/api/admin/*`. Webhook pembayaran tidak memakai bearer token; ia memakai `signature_key` SHA-512 seperti dijelaskan pada spec.
+
+---
+
 ## 💻 Cara Menjalankan
 
 ### 1. Install Dependencies
@@ -461,6 +527,9 @@ npm run test:coverage
 
 # Pemeriksaan sintaks seluruh file JavaScript di src/, scripts/, dan tests/
 npm run lint
+
+# Validasi kontrak OpenAPI (juga dijalankan di CI)
+npm run docs:validate
 ```
 
 `test:db` dan `test:coverage` memakai `TEST_DATABASE_URL`, **bukan** `DATABASE_URL`. Script akan menolak berjalan jika keduanya sama, sehingga database utama tidak tersentuh. Database test dimigrasikan otomatis sebelum test dijalankan.

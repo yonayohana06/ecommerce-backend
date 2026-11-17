@@ -1,0 +1,3010 @@
+openapi: 3.0.3
+info:
+  title: FastShop API
+  version: 1.0.0
+  description: |
+    Kontrak HTTP untuk backend FastShop.
+
+    - Base URL lokal: `http://localhost:3001`.
+    - Endpoint user memakai header `Authorization: Bearer <user-jwt>`.
+    - Endpoint admin memakai header `Authorization: Bearer <admin-jwt>`.
+    - Error selalu memakai bentuk `{ "code": <status>, "message": "<pesan>" }`.
+    - ID kolom PostgreSQL `bigint` dikirim sebagai JSON string; ID `serial`/`integer`
+      dikirim sebagai JSON number.
+    - Harga dan total dikirim sebagai JSON number (Rupiah).
+servers:
+  - url: http://localhost:3001
+    description: Local development
+tags:
+  - name: System
+    description: Liveness dan readiness.
+  - name: Auth
+    description: Registrasi dan login pelanggan.
+  - name: Admin Auth
+    description: Login dan profil administrator.
+  - name: Products
+    description: Katalog produk publik.
+  - name: Categories
+    description: Katalog kategori publik.
+  - name: Admin Products
+    description: Manajemen produk untuk administrator.
+  - name: Admin Categories
+    description: Manajemen kategori untuk administrator.
+  - name: Admin Orders
+    description: Monitoring dan perubahan status pesanan.
+  - name: Admin Audit Logs
+    description: Riwayat aksi administratif.
+paths:
+  /health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: Liveness check
+      description: Memastikan proses server hidup tanpa menyentuh database.
+      responses:
+        '200':
+          description: Proses hidup.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /200:
+    get:
+      tags: [System]
+      operationId: getHealthAlias
+      summary: Alias liveness check
+      description: Alias lama `/health` untuk kompatibilitas monitoring.
+      responses:
+        '200':
+          description: Proses hidup.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+              example:
+                status: ok
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /ready:
+    get:
+      tags: [System]
+      operationId: getReadiness
+      summary: Readiness check
+      description: Menjalankan `SELECT 1` ke database utama.
+      responses:
+        '200':
+          description: Database siap.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyResponse'
+              example:
+                status: ready
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      operationId: registerUser
+      summary: Registrasi pelanggan
+      description: Membuat akun pelanggan dengan role `user`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              name: Budi Santoso
+              email: budi@example.com
+              password: Password123
+      responses:
+        '201':
+          description: Registrasi berhasil.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterEnvelope'
+              example:
+                code: 201
+                message: Registrasi akun berhasil
+                data:
+                  id: '1'
+                  name: Budi Santoso
+                  email: budi@example.com
+                  role: user
+                  created_at: '2026-11-17T10:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      operationId: loginUser
+      summary: Login pelanggan
+      description: |
+        Menghasilkan JWT user (default berlaku 1 hari). Kredensial salah,
+        akun admin, dan email tidak dikenal semuanya menghasilkan pesan generik
+        `401` agar role akun tidak dapat dienumerasi.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: budi@example.com
+              password: Password123
+      responses:
+        '200':
+          description: Login berhasil.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthEnvelope'
+              example:
+                code: 200
+                message: Login berhasil
+                data:
+                  user:
+                    id: '1'
+                    name: Budi Santoso
+                    email: budi@example.com
+                    role: user
+                  token: user-token-placeholder
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      operationId: getUserProfile
+      summary: Profil pelanggan
+      security:
+        - userBearer: []
+      responses:
+        '200':
+          description: Profil pelanggan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil profil pengguna
+                data:
+                  id: '1'
+                  name: Budi Santoso
+                  email: budi@example.com
+                  phone_number: null
+                  role: user
+                  created_at: '2026-11-17T10:00:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/auth/login:
+    post:
+      tags: [Admin Auth]
+      operationId: loginAdmin
+      summary: Login administrator
+      description: |
+        Menghasilkan JWT admin (default berlaku 8 jam). Hanya akun dengan role
+        `admin` yang dapat login; kegagalan memakai pesan generik `401`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: admin@example.com
+              password: AdminPassword123
+      responses:
+        '200':
+          description: Login admin berhasil.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAuthEnvelope'
+              example:
+                code: 200
+                message: Login admin berhasil
+                data:
+                  admin:
+                    id: '2'
+                    name: Administrator
+                    email: admin@example.com
+                    role: admin
+                  token: admin-token-placeholder
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/auth/me:
+    get:
+      tags: [Admin Auth]
+      operationId: getAdminProfile
+      summary: Profil administrator
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Profil administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil profil administrator
+                data:
+                  id: '2'
+                  name: Administrator
+                  email: admin@example.com
+                  phone_number: null
+                  role: admin
+                  created_at: '2026-11-17T10:00:00.000Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/products:
+    get:
+      tags: [Products]
+      operationId: listProducts
+      summary: Daftar produk aktif
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+        - $ref: '#/components/parameters/ProductSearch'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Daftar produk aktif.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductListEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil daftar produk
+                data:
+                  - id: '12'
+                    name: Kopi Arabica
+                    price: 85000
+                    stock: 20
+                    image_url: https://example.com/kopi.jpg
+                    category_name: Minuman
+                pagination:
+                  currentPage: 1
+                  limit: 10
+                  totalItems: 1
+                  totalPages: 1
+                  hasPreviousPage: false
+                  hasNextPage: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/products/{id}:
+    get:
+      tags: [Products]
+      operationId: getProductDetail
+      summary: Detail produk aktif
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Detail produk.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetailEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil detail produk
+                data:
+                  id: '12'
+                  name: Kopi Arabica
+                  description: Biji kopi arabica premium.
+                  price: 85000
+                  stock: 20
+                  image_url: https://example.com/kopi.jpg
+                  category_id: 1
+                  category_name: Minuman
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/categories:
+    get:
+      tags: [Categories]
+      operationId: listCategories
+      summary: Daftar kategori
+      parameters:
+        - $ref: '#/components/parameters/CategorySearch'
+      responses:
+        '200':
+          description: Daftar kategori beserta jumlah produk aktif.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil daftar kategori
+                data:
+                  - id: 1
+                    name: Minuman
+                    slug: minuman
+                    icon_url: https://example.com/icons/minuman.png
+                    created_at: '2026-11-17T10:00:00.000Z'
+                    product_count: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/categories/slug/{slug}:
+    get:
+      tags: [Categories]
+      operationId: getCategoryBySlug
+      summary: Detail kategori berdasarkan slug
+      parameters:
+        - $ref: '#/components/parameters/Slug'
+      responses:
+        '200':
+          description: Detail kategori.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryDetailEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil detail kategori
+                data:
+                  id: 1
+                  name: Minuman
+                  slug: minuman
+                  icon_url: https://example.com/icons/minuman.png
+                  created_at: '2026-11-17T10:00:00.000Z'
+                  product_count: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/categories/{id}:
+    get:
+      tags: [Categories]
+      operationId: getCategoryDetail
+      summary: Detail kategori berdasarkan ID
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Detail kategori.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryDetailEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil detail kategori
+                data:
+                  id: 1
+                  name: Minuman
+                  slug: minuman
+                  icon_url: https://example.com/icons/minuman.png
+                  created_at: '2026-11-17T10:00:00.000Z'
+                  product_count: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/cart:
+    get:
+      tags: [Cart]
+      operationId: getCart
+      summary: Isi keranjang user
+      description: |
+        Mengembalikan seluruh item keranjang milik user yang login.
+        Item dari produk nonaktif tetap tampil dengan `is_available: false`
+        agar dapat dihapus, tetapi tidak dihitung ke `grand_total`.
+      security:
+        - userBearer: []
+      responses:
+        '200':
+          description: Isi keranjang.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil data keranjang
+                data:
+                  items:
+                    - cart_item_id: 5
+                      product_id: '12'
+                      product_name: Kopi Arabica
+                      price: 85000
+                      image_url: https://example.com/kopi.jpg
+                      quantity: 2
+                      stock: 20
+                      is_active: true
+                      is_available: true
+                      subtotal: 170000
+                  grand_total: 170000
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Cart]
+      operationId: addCartItem
+      summary: Tambah produk ke keranjang
+      description: |
+        Menambahkan produk aktif ke keranjang. Jika produk sudah ada, quantity
+        dijumlahkan. Total quantity tidak boleh melebihi stok. Respons memakai
+        row `cart_items` mentah (`id`, `user_id`, `product_id`, `quantity`,
+        `created_at`, `updated_at`), bukan objek CartItem.
+      security:
+        - userBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddCartRequest'
+            example:
+              product_id: 12
+              quantity: 2
+      responses:
+        '200':
+          description: Item berhasil ditambahkan atau quantity diperbarui.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartItemRowEnvelope'
+              example:
+                code: 200
+                message: Berhasil menambahkan produk ke keranjang
+                data:
+                  id: 5
+                  user_id: '1'
+                  product_id: '12'
+                  quantity: 2
+                  created_at: '2026-11-17T10:00:00.000Z'
+                  updated_at: '2026-11-17T10:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Cart]
+      operationId: clearCart
+      summary: Kosongkan keranjang
+      description: Menghapus seluruh item keranjang milik user yang login.
+      security:
+        - userBearer: []
+      responses:
+        '200':
+          description: Keranjang dikosongkan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClearCartEnvelope'
+              example:
+                code: 200
+                message: Seluruh isi keranjang berhasil dikosongkan
+                data:
+                  deleted_count: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/cart/{id}:
+    put:
+      tags: [Cart]
+      operationId: updateCartItem
+      summary: Ubah quantity item keranjang
+      description: |
+        Quantity harus bilangan bulat positif dan tidak boleh melebihi stok.
+        Produk nonaktif tidak dapat diubah. Respons memakai row `cart_items` mentah.
+      security:
+        - userBearer: []
+      parameters:
+        - $ref: '#/components/parameters/CartItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCartRequest'
+            example:
+              quantity: 3
+      responses:
+        '200':
+          description: Quantity diperbarui.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartItemRowEnvelope'
+              example:
+                code: 200
+                message: Berhasil memperbarui jumlah produk
+                data:
+                  id: 5
+                  user_id: '1'
+                  product_id: '12'
+                  quantity: 3
+                  created_at: '2026-11-17T10:00:00.000Z'
+                  updated_at: '2026-11-17T10:05:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Cart]
+      operationId: deleteCartItem
+      summary: Hapus item keranjang
+      description: Menghapus satu item keranjang milik user yang login.
+      security:
+        - userBearer: []
+      parameters:
+        - $ref: '#/components/parameters/CartItemId'
+      responses:
+        '200':
+          description: Item dihapus.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteCartItemEnvelope'
+              example:
+                code: 200
+                message: Item berhasil dihapus dari keranjang
+                data:
+                  id: 5
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/orders/checkout:
+    post:
+      tags: [Orders]
+      operationId: checkoutOrder
+      summary: Checkout keranjang
+      description: |
+        Membuat pesanan `PENDING` dari seluruh isi keranjang, memotong stok,
+        dan mengosongkan keranjang. Ditolak dengan `400` bila keranjang kosong,
+        ada produk nonaktif, atau stok tidak mencukupi.
+      security:
+        - userBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+            example:
+              shipping_address: Jl. Contoh No. 1, Jakarta Selatan 12345
+      responses:
+        '201':
+          description: Pesanan dibuat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutEnvelope'
+              example:
+                code: 201
+                message: Checkout berhasil. Pesanan Anda telah dibuat.
+                data:
+                  id: '57'
+                  user_id: '1'
+                  total_amount: 170000
+                  status: PENDING
+                  shipping_address: Jl. Contoh No. 1, Jakarta Selatan 12345
+                  payment_proof_url: null
+                  payment_submitted_at: null
+                  created_at: '2026-11-17T10:10:00.000Z'
+                  updated_at: '2026-11-17T10:10:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/orders:
+    get:
+      tags: [Orders]
+      operationId: listUserOrders
+      summary: Riwayat pesanan user
+      description: |
+        Daftar pesanan milik user yang login, terbaru lebih dulu, beserta
+        ringkasan item. `payment_proof_url` berupa signed URL bila ada.
+      security:
+        - userBearer: []
+      parameters:
+        - $ref: '#/components/parameters/OrderStatusFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Daftar pesanan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderListEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil daftar pesanan
+                data:
+                  - order_id: '57'
+                    user_id: '1'
+                    total_amount: 170000
+                    status: PENDING
+                    shipping_address: Jl. Contoh No. 1, Jakarta Selatan 12345
+                    payment_proof_url: null
+                    payment_submitted_at: null
+                    created_at: '2026-11-17T10:10:00.000Z'
+                    updated_at: '2026-11-17T10:10:00.000Z'
+                    total_items: 1
+                    total_quantity: 2
+                    items:
+                      - order_item_id: '101'
+                        product_id: '12'
+                        product_name: Kopi Arabica
+                        product_image: https://example.com/kopi.jpg
+                        quantity: 2
+                        price_at_purchase: 85000
+                        subtotal: 170000
+                pagination:
+                  currentPage: 1
+                  limit: 10
+                  totalItems: 1
+                  totalPages: 1
+                  hasPreviousPage: false
+                  hasNextPage: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/orders/{id}:
+    get:
+      tags: [Orders]
+      operationId: getUserOrderDetail
+      summary: Detail pesanan user
+      description: |
+        Detail pesanan milik user yang login. Pesanan milik user lain
+        dikembalikan sebagai `404`. `payment_proof_url` berupa signed URL.
+      security:
+        - userBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Detail pesanan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetailEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil detail pesanan
+                data:
+                  id: '57'
+                  user_id: '1'
+                  total_amount: 170000
+                  status: PENDING
+                  shipping_address: Jl. Contoh No. 1, Jakarta Selatan 12345
+                  payment_proof_url: null
+                  payment_submitted_at: null
+                  created_at: '2026-11-17T10:10:00.000Z'
+                  updated_at: '2026-11-17T10:10:00.000Z'
+                  items:
+                    - order_item_id: '101'
+                      product_id: '12'
+                      product_name: Kopi Arabica
+                      product_image: https://example.com/kopi.jpg
+                      quantity: 2
+                      price_at_purchase: 85000
+                      subtotal: 170000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/orders/{orderId}/pay:
+    post:
+      tags: [Orders]
+      operationId: uploadPaymentProof
+      summary: Unggah bukti pembayaran
+      description: |
+        Meminta user mengunggah bukti transfer untuk pesanan `PENDING` miliknya.
+        Hanya menerima `multipart/form-data` dengan field `proof_image` berupa
+        JPEG, PNG, atau WebP maksimal 2 MB. Tipe file diverifikasi dari magic
+        bytes, bukan hanya header `Content-Type`. Setelah sukses status menjadi
+        `PROCESSING`. `payment_proof_url` pada respons ini adalah path file di
+        storage, bukan signed URL.
+      security:
+        - userBearer: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UploadProofRequest'
+      responses:
+        '200':
+          description: Bukti pembayaran diterima.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentProofEnvelope'
+              example:
+                code: 200
+                message: Bukti pembayaran berhasil diunggah. Menunggu konfirmasi admin.
+                data:
+                  id: '57'
+                  user_id: '1'
+                  total_amount: 170000
+                  status: PROCESSING
+                  shipping_address: Jl. Contoh No. 1, Jakarta Selatan 12345
+                  payment_proof_url: proof_57_1763374200000.jpg
+                  payment_submitted_at: '2026-11-17T10:15:00.000Z'
+                  created_at: '2026-11-17T10:10:00.000Z'
+                  updated_at: '2026-11-17T10:15:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/orders/webhook/payment:
+    post:
+      tags: [Orders]
+      operationId: handlePaymentWebhook
+      summary: Webhook status pembayaran
+      description: |
+        Callback dari payment gateway. Tidak memakai bearer token; autentikasi
+        memakai `signature_key` berupa hash **SHA-512** (bukan HMAC) dari
+        `order_id + status_code + gross_amount + PAYMENT_SERVER_KEY`.
+        `status_code` wajib dikirim walau tidak dipakai untuk mengubah status.
+        Status yang sama dengan status saat ini bersifat idempotent dan
+        dikembalikan dengan `already_processed: true`. Nominal `gross_amount`
+        harus sama dengan `total_amount` pesanan.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookRequest'
+            example:
+              order_id: '57'
+              status_code: '200'
+              transaction_status: settlement
+              gross_amount: '170000'
+              signature_key: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      responses:
+        '200':
+          description: Status pembayaran diproses.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookEnvelope'
+              example:
+                code: 200
+                message: Status pembayaran berhasil diproses
+                data:
+                  id: '57'
+                  user_id: '1'
+                  total_amount: 170000
+                  status: PAID
+                  shipping_address: Jl. Contoh No. 1, Jakarta Selatan 12345
+                  payment_proof_url: proof_57_1763374200000.jpg
+                  payment_submitted_at: '2026-11-17T10:15:00.000Z'
+                  created_at: '2026-11-17T10:10:00.000Z'
+                  updated_at: '2026-11-17T10:20:00.000Z'
+                  previous_status: PROCESSING
+                  already_processed: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/InvalidSignature'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/products:
+    get:
+      tags: [Admin Products]
+      operationId: adminListProducts
+      summary: Daftar produk (admin)
+      description: |
+        Menampilkan seluruh produk, termasuk yang nonaktif, beserta nama kategori.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/CategoryId'
+        - $ref: '#/components/parameters/ProductSearch'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Daftar produk admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductListEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil daftar produk
+                data:
+                  - id: '12'
+                    name: Kopi Arabica
+                    price: 85000
+                    stock: 20
+                    is_active: true
+                    image_url: https://example.com/kopi.jpg
+                    category_name: Minuman
+                pagination:
+                  currentPage: 1
+                  limit: 10
+                  totalItems: 1
+                  totalPages: 1
+                  hasPreviousPage: false
+                  hasNextPage: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin Products]
+      operationId: adminCreateProduct
+      summary: Tambah produk
+      description: |
+        Membuat produk baru. Respons memakai row `products` mentah hasil
+        `RETURNING *` (tanpa `category_name`). Aksi dicatat sebagai
+        `product.create` pada audit log.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProductRequest'
+            example:
+              name: Kopi Arabica
+              description: Biji kopi arabica premium.
+              price: 85000
+              stock: 20
+              category_id: 1
+              image_url: https://example.com/kopi.jpg
+              is_active: true
+      responses:
+        '201':
+          description: Produk dibuat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductRowEnvelope'
+              example:
+                code: 201
+                message: Berhasil menambahkan produk
+                data:
+                  id: '12'
+                  category_id: 1
+                  name: Kopi Arabica
+                  description: Biji kopi arabica premium.
+                  price: 85000
+                  stock: 20
+                  image_url: https://example.com/kopi.jpg
+                  is_active: true
+                  created_at: '2026-11-17T11:00:00.000Z'
+                  updated_at: '2026-11-17T11:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/products/{id}:
+    get:
+      tags: [Admin Products]
+      operationId: adminGetProductDetail
+      summary: Detail produk (admin)
+      description: Menampilkan produk apa pun, termasuk yang nonaktif.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Detail produk admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil detail produk
+                data:
+                  id: '12'
+                  name: Kopi Arabica
+                  description: Biji kopi arabica premium.
+                  price: 85000
+                  stock: 20
+                  is_active: true
+                  image_url: https://example.com/kopi.jpg
+                  category_id: 1
+                  category_name: Minuman
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin Products]
+      operationId: adminUpdateProduct
+      summary: Ubah produk
+      description: |
+        Field yang tidak dikirim tidak berubah. Respons memakai row `products`
+        mentah hasil `RETURNING *`. Aksi dicatat sebagai `product.update`.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProductRequest'
+            example:
+              price: 90000
+              stock: 15
+      responses:
+        '200':
+          description: Produk diperbarui.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminProductRowEnvelope'
+              example:
+                code: 200
+                message: Berhasil memperbarui produk
+                data:
+                  id: '12'
+                  category_id: 1
+                  name: Kopi Arabica
+                  description: Biji kopi arabica premium.
+                  price: 90000
+                  stock: 15
+                  image_url: https://example.com/kopi.jpg
+                  is_active: true
+                  created_at: '2026-11-17T11:00:00.000Z'
+                  updated_at: '2026-11-17T11:30:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin Products]
+      operationId: adminDeleteProduct
+      summary: Hapus produk
+      description: |
+        Produk yang pernah dibeli akan di-soft-delete (`is_active: false`,
+        `delete_type: soft_deleted`); produk yang belum pernah dibeli dihapus
+        permanen (`delete_type: hard_deleted`). Aksi dicatat sebagai
+        `product.delete`.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Produk dihapus.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDeleteEnvelope'
+              example:
+                code: 200
+                message: Produk berhasil dihapus secara permanen
+                data:
+                  id: '12'
+                  delete_type: hard_deleted
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/categories:
+    get:
+      tags: [Admin Categories]
+      operationId: adminListCategories
+      summary: Daftar kategori (admin)
+      description: Daftar seluruh kategori beserta jumlah produk aktif.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/CategorySearch'
+      responses:
+        '200':
+          description: Daftar kategori admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryListEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil daftar kategori admin
+                data:
+                  - id: 1
+                    name: Minuman
+                    slug: minuman
+                    icon_url: https://example.com/icons/minuman.png
+                    created_at: '2026-11-17T10:00:00.000Z'
+                    product_count: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags: [Admin Categories]
+      operationId: adminCreateCategory
+      summary: Tambah kategori
+      description: |
+        Membuat kategori baru. Slug dibuat otomatis dari nama bila tidak
+        dikirim. Nama atau slug duplikat ditolak `400`; `409` disediakan untuk
+        benturan unique constraint saat balapan request. Respons memakai row
+        `categories` mentah. Aksi dicatat sebagai `category.create`.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCategoryRequest'
+            example:
+              name: Minuman
+              slug: minuman
+              icon_url: https://example.com/icons/minuman.png
+      responses:
+        '201':
+          description: Kategori dibuat.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryRowEnvelope'
+              example:
+                code: 201
+                message: Berhasil menambahkan kategori baru
+                data:
+                  id: 1
+                  name: Minuman
+                  slug: minuman
+                  icon_url: https://example.com/icons/minuman.png
+                  created_at: '2026-11-17T10:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/categories/{id}:
+    get:
+      tags: [Admin Categories]
+      operationId: adminGetCategoryDetail
+      summary: Detail kategori (admin)
+      description: Detail kategori beserta jumlah produk aktif.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Detail kategori.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryDetailEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil detail kategori
+                data:
+                  id: 1
+                  name: Minuman
+                  slug: minuman
+                  icon_url: https://example.com/icons/minuman.png
+                  created_at: '2026-11-17T10:00:00.000Z'
+                  product_count: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags: [Admin Categories]
+      operationId: adminUpdateCategory
+      summary: Ubah kategori
+      description: |
+        Field yang tidak dikirim tidak berubah. Bila nama berubah tanpa slug
+        baru, slug di-generate ulang dari nama. Duplikat ditolak `400`; `409`
+        disediakan untuk benturan unique constraint. Respons memakai row
+        `categories` mentah. Aksi dicatat sebagai `category.update`.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCategoryRequest'
+            example:
+              name: Minuman Dingin
+      responses:
+        '200':
+          description: Kategori diperbarui.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryRowEnvelope'
+              example:
+                code: 200
+                message: Berhasil memperbarui kategori
+                data:
+                  id: 1
+                  name: Minuman Dingin
+                  slug: minuman-dingin
+                  icon_url: https://example.com/icons/minuman.png
+                  created_at: '2026-11-17T10:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags: [Admin Categories]
+      operationId: adminDeleteCategory
+      summary: Hapus kategori
+      description: |
+        Menghapus kategori; produk terkait menjadi tanpa kategori
+        (`category_id: null`). `affected_products_count` melaporkan jumlah
+        produk yang terdampak. Aksi dicatat sebagai `category.delete`.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Kategori dihapus.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryDeleteEnvelope'
+              example:
+                code: 200
+                message: Kategori berhasil dihapus. 3 produk terkait kini menjadi tanpa kategori.
+                data:
+                  category:
+                    id: 1
+                    name: Minuman
+                    slug: minuman
+                    icon_url: https://example.com/icons/minuman.png
+                    created_at: '2026-11-17T10:00:00.000Z'
+                  affected_products_count: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/orders/summary:
+    get:
+      tags: [Admin Orders]
+      operationId: adminGetOrderSummary
+      summary: Ringkasan statistik pesanan
+      description: |
+        Total pesanan, total omset dari status `PAID`/`SHIPPED`/`COMPLETED`,
+        dan jumlah pesanan per status.
+      security:
+        - adminBearer: []
+      responses:
+        '200':
+          description: Ringkasan pesanan.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderStatsEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil ringkasan statistik pesanan
+                data:
+                  totalOrders: 42
+                  totalRevenue: 3570000
+                  ordersByStatus:
+                    PENDING: 10
+                    PROCESSING: 4
+                    PAID: 8
+                    SHIPPED: 6
+                    COMPLETED: 9
+                    CANCELLED: 3
+                    FAILED: 2
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/orders:
+    get:
+      tags: [Admin Orders]
+      operationId: adminListOrders
+      summary: Daftar pesanan (admin)
+      description: |
+        Daftar seluruh pesanan beserta email dan nama user. `search` mencocokkan
+        ID pesanan atau email. `payment_proof_url` berupa signed URL bila ada.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/OrderStatusFilter'
+        - $ref: '#/components/parameters/AdminOrderSearch'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Daftar pesanan admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOrderListEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil daftar pesanan admin
+                data:
+                  - order_id: '57'
+                    user_id: '1'
+                    email: budi@example.com
+                    user_name: Budi Santoso
+                    total_amount: 170000
+                    status: PENDING
+                    shipping_address: Jl. Contoh No. 1, Jakarta Selatan 12345
+                    payment_proof_url: null
+                    payment_submitted_at: null
+                    created_at: '2026-11-17T10:10:00.000Z'
+                    updated_at: '2026-11-17T10:10:00.000Z'
+                pagination:
+                  currentPage: 1
+                  limit: 10
+                  totalItems: 1
+                  totalPages: 1
+                  hasPreviousPage: false
+                  hasNextPage: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/orders/{orderId}:
+    get:
+      tags: [Admin Orders]
+      operationId: adminGetOrderDetail
+      summary: Detail pesanan (admin)
+      description: |
+        Detail pesanan beserta data user dan item. `payment_proof_url` berupa
+        signed URL bila ada.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: Detail pesanan admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminOrderDetailEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil detail pesanan
+                data:
+                  id: '57'
+                  user_id: '1'
+                  email: budi@example.com
+                  user_name: Budi Santoso
+                  phone_number: null
+                  total_amount: 170000
+                  status: PENDING
+                  shipping_address: Jl. Contoh No. 1, Jakarta Selatan 12345
+                  payment_proof_url: null
+                  payment_submitted_at: null
+                  created_at: '2026-11-17T10:10:00.000Z'
+                  updated_at: '2026-11-17T10:10:00.000Z'
+                  items:
+                    - order_item_id: '101'
+                      product_id: '12'
+                      product_name: Kopi Arabica
+                      product_image: https://example.com/kopi.jpg
+                      quantity: 2
+                      price_at_purchase: 85000
+                      subtotal: 170000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/orders/{orderId}/status:
+    patch:
+      tags: [Admin Orders]
+      operationId: adminUpdateOrderStatus
+      summary: Ubah status pesanan
+      description: |
+        Transisi yang diizinkan:
+        `PENDING → PROCESSING/PAID/CANCELLED/FAILED`,
+        `PROCESSING → PAID/CANCELLED/FAILED`,
+        `PAID → SHIPPED`, `SHIPPED → COMPLETED`, dan
+        `CANCELLED/FAILED → PAID` (stok dipotong kembali).
+        Transisi lain ditolak `400`. Status yang sama tidak mengubah apa pun.
+        Pembatalan mengembalikan stok. Aksi yang benar-benar mengubah status
+        dicatat sebagai `order.status.update`. `payment_proof_url` pada respons
+        berupa signed URL bila ada.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StatusUpdateRequest'
+            example:
+              status: PAID
+      responses:
+        '200':
+          description: Status pesanan diperbarui.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderRowEnvelope'
+              example:
+                code: 200
+                message: Status pesanan berhasil diubah menjadi 'PAID'
+                data:
+                  id: '57'
+                  user_id: '1'
+                  total_amount: 170000
+                  status: PAID
+                  shipping_address: Jl. Contoh No. 1, Jakarta Selatan 12345
+                  payment_proof_url: proof_57_1763374200000.jpg
+                  payment_submitted_at: '2026-11-17T10:15:00.000Z'
+                  created_at: '2026-11-17T10:10:00.000Z'
+                  updated_at: '2026-11-17T10:25:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/audit-logs:
+    get:
+      tags: [Admin Audit Logs]
+      operationId: adminListAuditLogs
+      summary: Daftar audit log
+      description: |
+        Riwayat aksi administratif, terbaru lebih dulu. Filter opsional:
+        `entity_type`, `action`, dan `actor_id`. Aksi yang dicatat antara lain
+        `product.create/update/delete`, `category.create/update/delete`, dan
+        `order.status.update`.
+      security:
+        - adminBearer: []
+      parameters:
+        - $ref: '#/components/parameters/EntityTypeFilter'
+        - $ref: '#/components/parameters/AuditActionFilter'
+        - $ref: '#/components/parameters/ActorIdFilter'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Daftar audit log.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditLogListEnvelope'
+              example:
+                code: 200
+                message: Berhasil mengambil audit log
+                data:
+                  - id: '9001'
+                    actor_id: '2'
+                    actor_email: admin@example.com
+                    action: product.update
+                    entity_type: product
+                    entity_id: '12'
+                    before_data:
+                      price: 85000
+                    after_data:
+                      price: 90000
+                    ip_address: 127.0.0.1
+                    created_at: '2026-11-17T11:30:00.000Z'
+                pagination:
+                  currentPage: 1
+                  limit: 10
+                  totalItems: 1
+                  totalPages: 1
+                  hasPreviousPage: false
+                  hasNextPage: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+components:
+  securitySchemes:
+    userBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT pelanggan yang ditandatangani dengan `JWT_SECRET`.
+    adminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT administrator yang ditandatangani dengan `ADMIN_JWT_SECRET`.
+  parameters:
+    Page:
+      name: page
+      in: query
+      required: false
+      description: Halaman yang diminta (mulai 1).
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Jumlah item per halaman (maksimal 100).
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+    Id:
+      name: id
+      in: path
+      required: true
+      description: ID numerik.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    Slug:
+      name: slug
+      in: path
+      required: true
+      description: Slug kategori yang ramah URL.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+    CategoryId:
+      name: category_id
+      in: query
+      required: false
+      description: Filter produk berdasarkan ID kategori.
+      schema:
+        type: integer
+        minimum: 1
+    ProductSearch:
+      name: search
+      in: query
+      required: false
+      description: Pencarian nama produk (case-insensitive).
+      schema:
+        type: string
+        maxLength: 100
+    CategorySearch:
+      name: search
+      in: query
+      required: false
+      description: Pencarian nama kategori (case-insensitive).
+      schema:
+        type: string
+        maxLength: 100
+    CartItemId:
+      name: id
+      in: path
+      required: true
+      description: ID item keranjang (`cart_items.id`, integer).
+      schema:
+        type: integer
+        minimum: 1
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      description: ID pesanan (`orders.id`, bigint).
+      schema:
+        type: string
+        pattern: '^[1-9][0-9]*$'
+        example: '57'
+    OrderStatusFilter:
+      name: status
+      in: query
+      required: false
+      description: Filter pesanan berdasarkan status.
+      schema:
+        $ref: '#/components/schemas/OrderStatus'
+    AdminOrderSearch:
+      name: search
+      in: query
+      required: false
+      description: Pencarian berdasarkan ID pesanan atau email user.
+      schema:
+        type: string
+        maxLength: 150
+    EntityTypeFilter:
+      name: entity_type
+      in: query
+      required: false
+      description: Filter berdasarkan tipe entitas (mis. `product`, `category`, `order`).
+      schema:
+        type: string
+        maxLength: 50
+    AuditActionFilter:
+      name: action
+      in: query
+      required: false
+      description: Filter berdasarkan nama aksi (mis. `product.update`).
+      schema:
+        type: string
+        maxLength: 100
+    ActorIdFilter:
+      name: actor_id
+      in: query
+      required: false
+      description: Filter berdasarkan ID administrator yang melakukan aksi.
+      schema:
+        type: integer
+        minimum: 1
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: Input tidak valid.
+    SuccessResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: integer
+          example: 200
+        message:
+          type: string
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ok
+    ReadyResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          example: ready
+    Pagination:
+      type: object
+      required:
+        - currentPage
+        - limit
+        - totalItems
+        - totalPages
+        - hasPreviousPage
+        - hasNextPage
+      properties:
+        currentPage:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+        totalItems:
+          type: integer
+          example: 42
+        totalPages:
+          type: integer
+          example: 5
+        hasPreviousPage:
+          type: boolean
+          example: false
+        hasNextPage:
+          type: boolean
+          example: true
+    UserSummary:
+      type: object
+      required: [id, name, email, role]
+      properties:
+        id:
+          type: string
+          description: ID bigint dari PostgreSQL.
+          example: '1'
+        name:
+          type: string
+          example: Budi Santoso
+        email:
+          type: string
+          format: email
+          example: budi@example.com
+        role:
+          type: string
+          enum: [user, admin]
+          example: user
+    User:
+      allOf:
+        - $ref: '#/components/schemas/UserSummary'
+        - type: object
+          required: [created_at]
+          properties:
+            phone_number:
+              type: string
+              nullable: true
+              example: null
+            created_at:
+              type: string
+              format: date-time
+              example: '2026-11-17T10:00:00.000Z'
+    RegisterRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Budi Santoso
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          example: budi@example.com
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: Minimal 8 karakter, maksimal 72 byte, serta mengandung huruf dan angka.
+          example: Password123
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 150
+          example: budi@example.com
+        password:
+          type: string
+          example: Password123
+    AuthEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [user, token]
+              properties:
+                user:
+                  $ref: '#/components/schemas/UserSummary'
+                token:
+                  type: string
+                  description: JWT user; default berlaku 1 hari.
+                  example: user-token-placeholder
+    AdminAuthEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [admin, token]
+              properties:
+                admin:
+                  $ref: '#/components/schemas/UserSummary'
+                token:
+                  type: string
+                  description: JWT admin; default berlaku 8 jam.
+                  example: admin-token-placeholder
+    UserEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/User'
+    RegisterEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/User'
+    ProductSummary:
+      type: object
+      required: [id, name, price, stock]
+      properties:
+        id:
+          type: string
+          description: ID bigint produk.
+          example: '12'
+        name:
+          type: string
+          example: Kopi Arabica
+        price:
+          type: number
+          description: Harga dalam Rupiah.
+          example: 85000
+        stock:
+          type: integer
+          example: 20
+        image_url:
+          type: string
+          nullable: true
+          example: https://example.com/kopi.jpg
+        category_name:
+          type: string
+          nullable: true
+          example: Minuman
+    ProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/ProductSummary'
+        - type: object
+          properties:
+            description:
+              type: string
+              nullable: true
+              example: Biji kopi arabica premium.
+            category_id:
+              type: integer
+              nullable: true
+              example: 1
+    AdminProductSummary:
+      allOf:
+        - $ref: '#/components/schemas/ProductSummary'
+        - type: object
+          required: [is_active]
+          properties:
+            is_active:
+              type: boolean
+              example: true
+    AdminProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/ProductDetail'
+        - type: object
+          required: [is_active]
+          properties:
+            is_active:
+              type: boolean
+              example: true
+    Category:
+      type: object
+      required: [id, name, slug, created_at, product_count]
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Minuman
+        slug:
+          type: string
+          example: minuman
+        icon_url:
+          type: string
+          nullable: true
+          example: https://example.com/icons/minuman.png
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:00:00.000Z'
+        product_count:
+          type: integer
+          description: Jumlah produk aktif dalam kategori.
+          example: 3
+    ProductListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data, pagination]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductSummary'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+    ProductDetailEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/ProductDetail'
+    CategoryListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Category'
+    CategoryDetailEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/Category'
+    OrderStatus:
+      type: string
+      enum: [PENDING, PAID, PROCESSING, SHIPPED, COMPLETED, CANCELLED, FAILED]
+      example: PENDING
+    CartItem:
+      type: object
+      required:
+        - cart_item_id
+        - product_id
+        - product_name
+        - price
+        - quantity
+        - stock
+        - is_active
+        - is_available
+        - subtotal
+      properties:
+        cart_item_id:
+          type: integer
+          description: ID baris `cart_items`.
+          example: 5
+        product_id:
+          type: string
+          description: ID bigint produk.
+          example: '12'
+        product_name:
+          type: string
+          example: Kopi Arabica
+        price:
+          type: number
+          description: Harga satuan dalam Rupiah.
+          example: 85000
+        image_url:
+          type: string
+          nullable: true
+          example: https://example.com/kopi.jpg
+        quantity:
+          type: integer
+          example: 2
+        stock:
+          type: integer
+          description: Stok produk saat ini.
+          example: 20
+        is_active:
+          type: boolean
+          description: Status aktif produk.
+          example: true
+        is_available:
+          type: boolean
+          description: True bila produk aktif dan stok mencukupi quantity keranjang.
+          example: true
+        subtotal:
+          type: number
+          description: price × quantity.
+          example: 170000
+    CartResponse:
+      type: object
+      required: [items, grand_total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        grand_total:
+          type: number
+          description: |
+            Total hanya dari item dengan `is_available: true`. Item nonaktif
+            atau stok kurang tetap ditampilkan tetapi tidak dihitung.
+          example: 170000
+    CartEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/CartResponse'
+    CartItemRow:
+      type: object
+      description: Row `cart_items` mentah yang dikembalikan endpoint tambah/ubah.
+      required:
+        - id
+        - user_id
+        - product_id
+        - quantity
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          example: 5
+        user_id:
+          type: string
+          description: ID bigint user.
+          example: '1'
+        product_id:
+          type: string
+          description: ID bigint produk.
+          example: '12'
+        quantity:
+          type: integer
+          example: 2
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:00:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:00:00.000Z'
+    CartItemRowEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/CartItemRow'
+    DeleteCartItemEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: integer
+                  description: ID item keranjang yang dihapus.
+                  example: 5
+    ClearCartEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [deleted_count]
+              properties:
+                deleted_count:
+                  type: integer
+                  description: Jumlah item yang dihapus.
+                  example: 3
+    AddCartRequest:
+      type: object
+      required: [product_id, quantity]
+      properties:
+        product_id:
+          type: integer
+          minimum: 1
+          description: ID produk aktif. String angka juga diterima oleh validasi.
+          example: 12
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+    UpdateCartRequest:
+      type: object
+      required: [quantity]
+      properties:
+        quantity:
+          type: integer
+          minimum: 1
+          example: 3
+    OrderItem:
+      type: object
+      required:
+        - order_item_id
+        - product_id
+        - product_name
+        - quantity
+        - price_at_purchase
+        - subtotal
+      properties:
+        order_item_id:
+          type: string
+          description: ID bigint baris `order_items`.
+          example: '101'
+        product_id:
+          type: string
+          description: ID bigint produk.
+          example: '12'
+        product_name:
+          type: string
+          example: Kopi Arabica
+        product_image:
+          type: string
+          nullable: true
+          example: https://example.com/kopi.jpg
+        quantity:
+          type: integer
+          example: 2
+        price_at_purchase:
+          type: number
+          description: Harga saat checkout (snapshot).
+          example: 85000
+        subtotal:
+          type: number
+          example: 170000
+    OrderSummary:
+      type: object
+      description: Ringkasan pesanan pada daftar riwayat user.
+      required:
+        - order_id
+        - user_id
+        - total_amount
+        - status
+        - shipping_address
+        - created_at
+        - updated_at
+        - total_items
+        - total_quantity
+        - items
+      properties:
+        order_id:
+          type: string
+          description: ID bigint pesanan.
+          example: '57'
+        user_id:
+          type: string
+          example: '1'
+        total_amount:
+          type: number
+          example: 170000
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        shipping_address:
+          type: string
+          example: Jl. Contoh No. 1, Jakarta Selatan 12345
+        payment_proof_url:
+          type: string
+          nullable: true
+          description: Signed URL bukti pembayaran (berlaku terbatas).
+          example: https://example.supabase.co/storage/v1/object/sign/payment-proofs/proof_57.jpg
+        payment_submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-11-17T10:15:00.000Z'
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:10:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:20:00.000Z'
+        total_items:
+          type: integer
+          example: 1
+        total_quantity:
+          type: integer
+          example: 2
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+    OrderDetail:
+      allOf:
+        - $ref: '#/components/schemas/OrderRow'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderItem'
+    OrderRow:
+      type: object
+      description: Row `orders` hasil create/update; belum termasuk item.
+      required:
+        - id
+        - user_id
+        - total_amount
+        - status
+        - shipping_address
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: ID bigint pesanan.
+          example: '57'
+        user_id:
+          type: string
+          example: '1'
+        total_amount:
+          type: number
+          example: 170000
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        shipping_address:
+          type: string
+          example: Jl. Contoh No. 1, Jakarta Selatan 12345
+        payment_proof_url:
+          type: string
+          nullable: true
+          description: |
+            Path file di private bucket pada respons upload dan webhook.
+            Endpoint baca dan perubahan status admin mengembalikan signed URL.
+          example: proof_57_1763374200000.jpg
+        payment_submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-11-17T10:15:00.000Z'
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:10:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:20:00.000Z'
+    OrderWebhookResult:
+      allOf:
+        - $ref: '#/components/schemas/OrderRow'
+        - type: object
+          required: [previous_status, already_processed]
+          properties:
+            previous_status:
+              $ref: '#/components/schemas/OrderStatus'
+            already_processed:
+              type: boolean
+              description: True bila status yang dikirim sama dengan status saat ini.
+              example: false
+    CheckoutRequest:
+      type: object
+      required: [shipping_address]
+      properties:
+        shipping_address:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          example: Jl. Contoh No. 1, Jakarta Selatan 12345
+    UploadProofRequest:
+      type: object
+      required: [proof_image]
+      properties:
+        proof_image:
+          type: string
+          format: binary
+          description: |
+            File gambar bukti transfer. Hanya JPEG, PNG, atau WebP, maksimal
+            2 MB. Tipe sebenarnya dideteksi dari magic bytes dan harus cocok
+            dengan `Content-Type`.
+    WebhookRequest:
+      type: object
+      required:
+        - order_id
+        - status_code
+        - transaction_status
+        - gross_amount
+        - signature_key
+      properties:
+        order_id:
+          description: ID pesanan.
+          oneOf:
+            - type: string
+              pattern: '^[1-9][0-9]*$'
+            - type: integer
+              minimum: 1
+          example: '57'
+        status_code:
+          description: Wajib untuk perhitungan signature, walau tidak mengubah status.
+          oneOf:
+            - type: string
+            - type: integer
+          example: '200'
+        transaction_status:
+          type: string
+          description: Status dari payment gateway (case-insensitive).
+          enum:
+            - capture
+            - settlement
+            - success
+            - paid
+            - pending
+            - cancel
+            - deny
+            - expire
+            - failure
+            - failed
+          example: settlement
+        gross_amount:
+          description: Nominal pembayaran; harus sama dengan total_amount pesanan.
+          oneOf:
+            - type: string
+              pattern: '^[0-9]+(\.[0-9]+)?$'
+            - type: number
+          example: '170000'
+        signature_key:
+          type: string
+          pattern: '^[a-f0-9]{128}$'
+          description: |
+            Hash SHA-512 (hex, 128 karakter) dari
+            `order_id + status_code + gross_amount + PAYMENT_SERVER_KEY`.
+            Bukan HMAC dan bukan token bearer.
+          example: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+    CheckoutEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/OrderRow'
+    OrderListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data, pagination]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderSummary'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+    OrderDetailEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/OrderDetail'
+    PaymentProofEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/OrderRow'
+    WebhookEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/OrderWebhookResult'
+    AdminProductRow:
+      type: object
+      description: Row `products` mentah hasil create/update.
+      required:
+        - id
+        - name
+        - price
+        - stock
+        - is_active
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          description: ID bigint produk.
+          example: '12'
+        category_id:
+          type: integer
+          nullable: true
+          example: 1
+        name:
+          type: string
+          example: Kopi Arabica
+        description:
+          type: string
+          nullable: true
+          example: Biji kopi arabica premium.
+        price:
+          type: number
+          example: 85000
+        stock:
+          type: integer
+          example: 20
+        image_url:
+          type: string
+          nullable: true
+          example: https://example.com/kopi.jpg
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T11:00:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T11:00:00.000Z'
+    AdminProductListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data, pagination]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminProductSummary'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+    AdminProductEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminProductDetail'
+    AdminProductRowEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminProductRow'
+    ProductDeleteEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [id, delete_type]
+              properties:
+                id:
+                  type: string
+                  example: '12'
+                delete_type:
+                  type: string
+                  enum: [soft_deleted, hard_deleted]
+                  example: hard_deleted
+    CreateProductRequest:
+      type: object
+      required: [name, price, stock]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Kopi Arabica
+        description:
+          type: string
+          maxLength: 5000
+          nullable: true
+          example: Biji kopi arabica premium.
+        price:
+          type: number
+          minimum: 0
+          maximum: 999999999999
+          example: 85000
+        stock:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          example: 20
+        category_id:
+          type: integer
+          minimum: 1
+          nullable: true
+          example: 1
+        image_url:
+          type: string
+          maxLength: 2048
+          nullable: true
+          example: https://example.com/kopi.jpg
+        is_active:
+          type: boolean
+          default: true
+          example: true
+    UpdateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Kopi Arabica
+        description:
+          type: string
+          maxLength: 5000
+          nullable: true
+          example: Biji kopi arabica premium.
+        price:
+          type: number
+          minimum: 0
+          maximum: 999999999999
+          example: 90000
+        stock:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+          example: 15
+        category_id:
+          type: integer
+          minimum: 1
+          nullable: true
+          example: 1
+        image_url:
+          type: string
+          maxLength: 2048
+          nullable: true
+          example: https://example.com/kopi.jpg
+        is_active:
+          type: boolean
+          example: true
+    CategoryRow:
+      type: object
+      description: Row `categories` mentah hasil create/update/delete.
+      required: [id, name, slug, created_at]
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Minuman
+        slug:
+          type: string
+          example: minuman
+        icon_url:
+          type: string
+          nullable: true
+          example: https://example.com/icons/minuman.png
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:00:00.000Z'
+    CategoryRowEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/CategoryRow'
+    CategoryDeleteEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [category, affected_products_count]
+              properties:
+                category:
+                  $ref: '#/components/schemas/CategoryRow'
+                affected_products_count:
+                  type: integer
+                  description: Jumlah produk yang category_id-nya menjadi null.
+                  example: 3
+    CreateCategoryRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Minuman
+        slug:
+          type: string
+          maxLength: 100
+          description: Opsional; dibuat otomatis dari nama bila kosong.
+          example: minuman
+        icon_url:
+          type: string
+          maxLength: 2048
+          nullable: true
+          example: https://example.com/icons/minuman.png
+    UpdateCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Minuman Dingin
+        slug:
+          type: string
+          maxLength: 100
+          example: minuman-dingin
+        icon_url:
+          type: string
+          maxLength: 2048
+          nullable: true
+          example: https://example.com/icons/minuman.png
+    AdminOrderSummary:
+      type: object
+      description: Ringkasan pesanan pada daftar admin.
+      required:
+        - order_id
+        - user_id
+        - email
+        - user_name
+        - total_amount
+        - status
+        - shipping_address
+        - created_at
+        - updated_at
+      properties:
+        order_id:
+          type: string
+          example: '57'
+        user_id:
+          type: string
+          example: '1'
+        email:
+          type: string
+          format: email
+          example: budi@example.com
+        user_name:
+          type: string
+          example: Budi Santoso
+        total_amount:
+          type: number
+          example: 170000
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        shipping_address:
+          type: string
+          example: Jl. Contoh No. 1, Jakarta Selatan 12345
+        payment_proof_url:
+          type: string
+          nullable: true
+          description: Signed URL bukti pembayaran bila ada.
+          example: https://example.supabase.co/storage/v1/object/sign/payment-proofs/proof_57.jpg
+        payment_submitted_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-11-17T10:15:00.000Z'
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:10:00.000Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T10:25:00.000Z'
+    AdminOrderListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data, pagination]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AdminOrderSummary'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+    AdminOrderDetail:
+      allOf:
+        - $ref: '#/components/schemas/OrderRow'
+        - type: object
+          required: [email, user_name, items]
+          properties:
+            email:
+              type: string
+              format: email
+              example: budi@example.com
+            user_name:
+              type: string
+              example: Budi Santoso
+            phone_number:
+              type: string
+              nullable: true
+              example: null
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderItem'
+    AdminOrderDetailEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/AdminOrderDetail'
+    OrderStats:
+      type: object
+      required: [totalOrders, totalRevenue, ordersByStatus]
+      properties:
+        totalOrders:
+          type: integer
+          example: 42
+        totalRevenue:
+          type: number
+          description: Omset dari status PAID, SHIPPED, dan COMPLETED.
+          example: 3570000
+        ordersByStatus:
+          type: object
+          required:
+            - PENDING
+            - PROCESSING
+            - PAID
+            - SHIPPED
+            - COMPLETED
+            - CANCELLED
+            - FAILED
+          properties:
+            PENDING:
+              type: integer
+              example: 10
+            PROCESSING:
+              type: integer
+              example: 4
+            PAID:
+              type: integer
+              example: 8
+            SHIPPED:
+              type: integer
+              example: 6
+            COMPLETED:
+              type: integer
+              example: 9
+            CANCELLED:
+              type: integer
+              example: 3
+            FAILED:
+              type: integer
+              example: 2
+    OrderStatsEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/OrderStats'
+    StatusUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+    OrderRowEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: '#/components/schemas/OrderRow'
+    AuditLog:
+      type: object
+      required:
+        - id
+        - action
+        - entity_type
+        - entity_id
+        - created_at
+      properties:
+        id:
+          type: string
+          description: ID bigint audit log.
+          example: '9001'
+        actor_id:
+          type: string
+          nullable: true
+          description: ID bigint admin; null untuk aksi sistem.
+          example: '2'
+        actor_email:
+          type: string
+          nullable: true
+          example: admin@example.com
+        action:
+          type: string
+          example: product.update
+        entity_type:
+          type: string
+          example: product
+        entity_id:
+          type: string
+          example: '12'
+        before_data:
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            price: 85000
+        after_data:
+          type: object
+          nullable: true
+          additionalProperties: true
+          example:
+            price: 90000
+        ip_address:
+          type: string
+          nullable: true
+          example: 127.0.0.1
+        created_at:
+          type: string
+          format: date-time
+          example: '2026-11-17T11:30:00.000Z'
+    AuditLogListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data, pagination]
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AuditLog'
+            pagination:
+              $ref: '#/components/schemas/Pagination'
+  responses:
+    InvalidSignature:
+      description: Signature webhook tidak valid atau tidak cocok.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 403
+            message: 'Forbidden: Invalid signature key'
+    BadRequest:
+      description: Request tidak valid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 400
+            message: Input tidak valid.
+    Unauthorized:
+      description: Token tidak ada, tidak valid, atau sudah kedaluwarsa.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 401
+            message: Token tidak valid atau sudah kedaluwarsa.
+    Forbidden:
+      description: Token valid tetapi role/type tidak sesuai.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 403
+            message: Akses dilarang.
+    NotFound:
+      description: Resource tidak ditemukan.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 404
+            message: Resource tidak ditemukan.
+    Conflict:
+      description: Data melanggar constraint keunikan.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 409
+            message: Data sudah terdaftar.
+    TooManyRequests:
+      description: Melewati batas rate limit.
+      headers:
+        Retry-After:
+          description: Detik sampai permintaan boleh dicoba lagi.
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 429
+            message: Terlalu banyak permintaan. Silakan coba lagi nanti.
+    InternalServerError:
+      description: Kesalahan server yang tidak terduga.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 500
+            message: Terjadi kesalahan pada server.
+    ServiceUnavailable:
+      description: Dependency belum siap.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            code: 503
+            message: Database belum siap.

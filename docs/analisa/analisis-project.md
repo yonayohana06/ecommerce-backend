@@ -281,7 +281,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 - ~~Audit log admin, refresh token/revocation.~~ (audit log admin selesai 16 November 2026; refresh token/revocation belum)
 - ~~Batch signed URL/caching.~~ (selesai)
-- OpenAPI/Swagger.
+- ~~OpenAPI/Swagger.~~ (selesai 16 November 2026: `docs/openapi.yaml` 38 operasi, Swagger UI hanya non-production, spec divalidasi di CI dan disinkronkan dengan route Express lewat tes)
 - Structured logging, metrics, tracing.
 - Migrasi bertahap ke TypeScript jika project akan terus berkembang.
 

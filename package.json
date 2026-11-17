@@ -10,6 +10,7 @@
     "test:db": "npm run test:db:prepare && RUN_DB_TESTS=1 node --require ./tests/setup.js --test --test-concurrency=1",
     "test:coverage": "npm run test:db:prepare && RUN_DB_TESTS=1 node --require ./tests/setup.js --test --test-concurrency=1 --experimental-test-coverage --test-coverage-lines=60 --test-coverage-branches=60 --test-coverage-functions=60",
     "lint": "node scripts/lint.js",
+    "docs:validate": "node scripts/validate-openapi.js",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "migrate:create": "node-pg-migrate create",
@@ -35,7 +36,10 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
     "node-pg-migrate": "^9.0.0",
-    "nodemon": "^3.1.14"
+    "nodemon": "^3.1.14",
+    "swagger-ui-express": "^5.0.1",
+    "yaml": "^2.9.1"
   }
 }

@@ -15,6 +15,7 @@ const orderRoutes = require("./routes/orderRoutes");
 const cartRoutes = require("./routes/cartRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const mainRoutes = require("./routes/index");
+const { isApiDocsEnabled, createApiDocsRouter } = require("./docs/apiDocs");
 const notFound = require("./middlewares/notFound");
 const errorHandler = require("./middlewares/errorHandler");
 
@@ -85,6 +86,11 @@ app.use("/api/cart", cartRoutes);
 
 app.use("/api", paymentRoutes);
 app.use("/api", mainRoutes);
+
+// Dokumentasi API hanya tersedia di non-production.
+if (isApiDocsEnabled()) {
+  app.use("/api/docs", createApiDocsRouter());
+}
 
 // Route tidak dikenal dan error tak tertangani selalu dikembalikan sebagai JSON.
 app.use(notFound);
