@@ -283,7 +283,7 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 - ~~Batch signed URL/caching.~~ (selesai)
 - ~~OpenAPI/Swagger.~~ (selesai 16 November 2026: `docs/openapi.yaml` 38 operasi, Swagger UI hanya non-production, spec divalidasi di CI dan disinkronkan dengan route Express lewat tes)
 - Structured logging, metrics, tracing.
-- Migrasi bertahap ke TypeScript jika project akan terus berkembang.
+- Migrasi bertahap ke TypeScript jika project akan terus berkembang. *(ditunda 17 November 2026: bukan syarat production readiness; runtime JS + Zod + 249 tes + OpenAPI sudah memadai. Fokus ke item operasional seperti refresh token/revocation, rate limit/cache multi-instance, observability, dan performa.)*
 
 ## 7. Kesimpulan
 

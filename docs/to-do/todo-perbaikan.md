@@ -793,6 +793,8 @@ Hasil: 20 tes docs lulus (6 `apiDocs` + 14 `openapi`). `npm test` 111 pass + 138
 
 **Temuan:** Tidak ada type checking.
 
+**Status 17 November 2026:** ditunda atas keputusan pemilik project. TypeScript tidak termasuk syarat production readiness untuk e-commerce skala menengah; project sudah memiliki 249 tes, validasi runtime Zod, dan kontrak OpenAPI. Selain itu `vercel.json` mem-build `src/app.js` langsung, sehingga migrasi file runtime ke `.ts` menuntut build/compile step dan perubahan deployment. Prioritaskan item P2 yang berdampak operasional: refresh token/revocation, rate limit & cache yang siap multi-instance, observability, dan performa.
+
 **Files:** `tsconfig.json`, `types/`, `package.json`.
 
 - [ ] Aktifkan TypeScript dengan `allowJs` terlebih dahulu.
