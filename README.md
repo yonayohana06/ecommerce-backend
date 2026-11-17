@@ -16,7 +16,7 @@ ECOMMERCE-BACKEND/
 │       ├── deploy.yml                # CI/CD: Otomatisasi migrasi database ke Supabase/Production
 │       └── test.yml                  # CI: lint, validasi OpenAPI, test non-DB, test DB + coverage
 ├── docs/
-│   ├── openapi.yaml                  # Kontrak OpenAPI 3.0.3 (38 operasi, sumber kebenaran)
+│   ├── openapi.yaml                  # Kontrak OpenAPI 3.0.3 (44 operasi, sumber kebenaran)
 │   ├── analisa/                      # Analisis project
 │   ├── superpowers/                  # Spec dan rencana implementasi
 │   └── to-do/                        # Checklist perbaikan
@@ -26,16 +26,19 @@ ECOMMERCE-BACKEND/
 │   ├── ..._table-cart-items.js
 │   ├── ..._add-payment-proof-to-orders.js
 │   ├── ..._align-cart-items-bigint.js
-│   └── ..._create-audit-logs.js
+│   ├── ..._create-audit-logs.js
+│   └── ..._add-refresh-tokens-and-token-version.js
 ├── scripts/
 │   └── validate-openapi.js           # Validasi docs/openapi.yaml untuk lokal dan CI
 ├── src/
 │   ├── config/
 │   │   ├── db.js                     # Pool PostgreSQL (max via DB_POOL_MAX, pool.on error)
+│   │   ├── origins.js                # Allowlist Origin untuk CORS dan proteksi CSRF
 │   │   └── supabase.js               # Client Supabase Storage untuk upload file bukti transfer
 │   ├── docs/
 │   │   └── apiDocs.js                # Router Swagger UI/JSON/YAML, hanya non-production
 │   ├── constants/
+│   │   ├── auth.js                   # Nama cookie refresh, path, dan portal auth
 │   │   └── orderStatus.js            # Enum status pesanan (PENDING, PAID, PROCESSING, dll)
 │   ├── controllers/
 │   │   ├── adminAuditLogController.js # Daftar audit log aksi admin (pagination + filter)
@@ -52,6 +55,7 @@ ECOMMERCE-BACKEND/
 │   │   ├── authMiddleware.js         # Token verification (verifyUserToken, verifyAdminToken, verifyAuthToken, RBAC)
 │   │   ├── errorHandler.js           # Error JSON konsisten + log stack di server
 │   │   ├── requestLogger.js          # X-Request-Id + log request terstruktur
+│   │   ├── requireTrustedOrigin.js   # Guard Origin untuk endpoint berbasis cookie
 │   │   ├── uploadMiddleware.js       # Konfigurasi Multer memory storage (gambar, maks 2MB)
 │   │   └── verifySignature.js        # Verifikasi SHA-512 hash signature payment gateway
 │   ├── routes/
@@ -69,7 +73,9 @@ ECOMMERCE-BACKEND/
 │   ├── services/
 │   │   ├── adminAuthService.js       # Logika auth admin, token khusus admin
 │   │   ├── auditLogService.js        # Pencatatan & pembacaan audit log admin
-│   │   ├── authService.js            # Hashing Bcrypt, otentikasi user, pembuatan JWT
+│   │   ├── authService.js            # Login/refresh/logout user, profil
+│   │   ├── authTokenService.js       # Refresh token opaque, rotasi, replay detection, revocation
+│   │   ├── passwordService.js        # Ganti password + pencabutan semua sesi
 │   │   ├── cartService.js            # Logika keranjang belanja (Upsert & validasi stok)
 │   │   ├── categoryService.js        # Logika kategori, auto-slugify, pencegahan duplikasi
 │   │   ├── orderService.js           # Transaksi checkout ACID & FOR UPDATE row locking
@@ -77,6 +83,7 @@ ECOMMERCE-BACKEND/
 │   │   └── productService.js         # Filter produk, ILIKE search, pagination, soft/hard delete
 │   ├── utils/
 │   │   ├── logger.js                 # Logger JSON terstruktur (info/warn/error/silent)
+│   │   ├── refreshCookie.js          # Set/clear/read cookie refresh HttpOnly
 │   │   └── serializers.js            # Konversi numeric PostgreSQL ke number response
 │   ├── app.js                        # Express app murni (tanpa listener)
 │   └── server.js                     # Entry point lokal: listener, cek DB, graceful shutdown
@@ -101,13 +108,20 @@ Sistem memisahkan secara ketat alur autentikasi dan otorisasi antara **Pelanggan
 * **Portal Pelanggan (`/api/auth`)**:
   * Pendaftaran publik (`/register`) otomatis menetapkan `role: 'user'`.
   * Login pelanggan (`/login`) menolak akun dengan `role: 'admin'` maupun kredensial salah menggunakan respons generik `401 Unauthorized` agar role akun tidak dapat dienumerasi.
-  * Token ditandatangani dengan `JWT_SECRET` (default durasi: **1 hari**).
+  * Login mengembalikan **access token JWT** (default **15 menit**) dan **refresh token** (default **30 hari**) lewat cookie `fastshop_user_refresh` yang `HttpOnly` dan hanya berlaku pada path `/api/auth`. Refresh token **tidak pernah** dikirim di body.
   * Proteksi endpoint pelanggan menggunakan middleware `verifyUserToken`.
 * **Portal Administrator (`/api/admin/auth`)**:
   * **Tidak memiliki endpoint registrasi publik**. Akun admin dibuat secara internal (seeder/CLI/database).
   * Login admin (`/login`) **wajib memiliki `role: 'admin'`**; user biasa yang mencoba login atau kredensial salah juga menerima respons generik `401 Unauthorized`.
-  * Token ditandatangani dengan `ADMIN_JWT_SECRET` (default durasi lebih singkat: **8 jam** demi keamanan).
+  * Login mengembalikan access token JWT (default **30 menit**) dan refresh token (default **8 jam**) lewat cookie `fastshop_admin_refresh` pada path `/api/admin/auth`.
   * Proteksi endpoint admin menggunakan middleware `verifyAdminToken`. `403 Forbidden` tetap dipakai saat token valid tetapi role/type tidak sesuai pada endpoint terproteksi.
+* **Refresh token dan revocation**:
+  * Refresh token berupa string opaque 256-bit; database hanya menyimpan hash SHA-256.
+  * Setiap `POST /refresh` **merotasi** token: token lama dicabut, token baru diterbitkan. Pemakaian ulang token lama dianggap replay dan mencabut seluruh *family* sesi tersebut.
+  * `POST /logout` mencabut refresh token family aktif. Access token tetap berlaku sampai TTL pendeknya habis.
+  * `PUT /password` menaikkan `users.token_version`, mencabut **semua** refresh token user, dan membuat seluruh access token lama langsung ditolak. Pengguna harus login ulang.
+  * Endpoint refresh/logout mewajibkan header `Origin` yang terdaftar di `src/config/origins.js` sebagai proteksi CSRF.
+  * Access token memuat `tokenVersion`; token lama tanpa klaim tersebut tetap diterima sampai `exp` habis agar deploy tidak memaksa logout massal.
 * Password dienkripsi dengan algoritma **Bcrypt** (salt rounds = 10).
 * Token dikirim melalui HTTP Header:
   ```http
@@ -219,13 +233,19 @@ Base URL: `http://localhost:3001/api`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `POST` | `/api/auth/register` | Publik | Mendaftarkan akun pelanggan baru (nama, email unik, password minimal 8 karakter serta mengandung huruf dan angka). |
-| `POST` | `/api/auth/login` | Publik | Login pelanggan (menolak akun admin), mengembalikan JWT User token (default 1 hari) dan profil. |
+| `POST` | `/api/auth/login` | Publik | Login pelanggan (menolak akun admin), mengembalikan access token (default 15 menit), profil, dan cookie refresh `HttpOnly` (30 hari). |
+| `POST` | `/api/auth/refresh` | Publik (cookie + `Origin`) | Memutar refresh token dan mengembalikan access token baru. Token lama dicabut; replay mencabut seluruh family. |
+| `POST` | `/api/auth/logout` | Publik (cookie + `Origin`) | Mencabut refresh token family aktif dan menghapus cookie. Idempoten. |
+| `PUT` | `/api/auth/password` | User | Mengganti password, menaikkan `token_version`, dan mencabut semua sesi refresh. Wajib login ulang. |
 | `GET` | `/api/auth/me` | User | Mengambil data profil pelanggan yang sedang login. |
 
 ### 🛠️ 2. Autentikasi Administrator — `/api/admin/auth`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
-| `POST` | `/api/admin/auth/login` | Publik (Admin) | Login administrator (wajib role `admin`), mengembalikan JWT Admin token (8 jam) dan profil. |
+| `POST` | `/api/admin/auth/login` | Publik (Admin) | Login administrator (wajib role `admin`), mengembalikan access token (default 30 menit), profil, dan cookie refresh `HttpOnly` (8 jam). |
+| `POST` | `/api/admin/auth/refresh` | Publik (cookie + `Origin`) | Memutar refresh token admin dan mengembalikan access token baru. |
+| `POST` | `/api/admin/auth/logout` | Publik (cookie + `Origin`) | Mencabut refresh token family admin dan menghapus cookie. Idempoten. |
+| `PUT` | `/api/admin/auth/password` | Admin | Mengganti password admin dan mencabut semua sesi admin. |
 | `GET` | `/api/admin/auth/me` | Admin | Mengambil data profil administrator yang sedang login. |
 
 ### 📦 3. Katalog Produk (Publik) — `/api/products`
@@ -309,7 +329,7 @@ Base URL: `http://localhost:3001/api`
 
 ## 📘 Dokumentasi API (OpenAPI)
 
-Kontrak API ditulis manual di **`docs/openapi.yaml`** (OpenAPI 3.0.3, 38 operasi) dan menjadi sumber kebenaran untuk request, response, auth, serta error. README ini tetap berguna sebagai ringkasan cepat, tetapi perubahan kontrak harus diperbarui di spec.
+Kontrak API ditulis manual di **`docs/openapi.yaml`** (OpenAPI 3.0.3, 44 operasi) dan menjadi sumber kebenaran untuk request, response, auth, serta error. README ini tetap berguna sebagai ringkasan cepat, tetapi perubahan kontrak harus diperbarui di spec.
 
 ### Akses Swagger UI
 
@@ -334,24 +354,43 @@ CI (`.github/workflows/test.yml`) menjalankan langkah yang sama sebelum lint. `n
 ### Contoh penggunaan
 
 ```bash
-# 1. Login pelanggan (token user default berlaku 1 hari)
-curl -s http://localhost:3001/api/auth/login \
+# 1. Login pelanggan: simpan cookie refresh ke cookies.txt
+curl -s -c cookies.txt http://localhost:3001/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"budi@example.com","password":"Password123"}'
+# Body hanya berisi access token + profil; refresh token tersimpan di cookies.txt.
 
-# 2. Katalog publik (tanpa token)
+# 2. Refresh access token (wajib cookie dan header Origin)
+curl -s -b cookies.txt -c cookies.txt -X POST \
+  http://localhost:3001/api/auth/refresh \
+  -H 'Origin: http://localhost:5173'
+
+# 3. Logout: mencabut refresh token family dan menghapus cookie
+curl -s -b cookies.txt -c cookies.txt -X POST \
+  http://localhost:3001/api/auth/logout \
+  -H 'Origin: http://localhost:5173'
+
+# 4. Ganti password (butuh access token; semua sesi dicabut)
+curl -s -X PUT http://localhost:3001/api/auth/password \
+  -H 'Authorization: Bearer <user-token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"current_password":"Password123","new_password":"PasswordBaru456"}'
+
+# 5. Katalog publik (tanpa token)
 curl -s 'http://localhost:3001/api/products?page=1&limit=10'
 
-# 3. Request ber-token: lihat keranjang (ganti <user-token>)
+# 6. Request ber-token: lihat keranjang (ganti <user-token>)
 curl -s http://localhost:3001/api/cart \
   -H 'Authorization: Bearer <user-token>'
 
-# 4. Login admin (token admin terpisah, default berlaku 8 jam)
-curl -s http://localhost:3001/api/admin/auth/login \
+# 7. Login admin: simpan cookie admin terpisah
+curl -s -c admin-cookies.txt http://localhost:3001/api/admin/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"admin@example.com","password":"AdminPassword123"}'
 ```
 
+> **CORS dan cookie:** frontend wajib mengirim kredensial (fetch `credentials: "include"` atau axios `withCredentials: true`). Browser akan mengirim header `Origin`; origin frontend harus terdaftar di `src/config/origins.js`. Untuk produksi lintas site gunakan `COOKIE_SECURE=true` dan `COOKIE_SAME_SITE=none`; untuk localhost HTTP gunakan `COOKIE_SECURE=false` dan `COOKIE_SAME_SITE=lax`.
+>
 > Gunakan token user hanya untuk endpoint pelanggan dan token admin hanya untuk endpoint `/api/admin/*`. Webhook pembayaran tidak memakai bearer token; ia memakai `signature_key` SHA-512 seperti dijelaskan pada spec.
 
 ---
@@ -396,11 +435,21 @@ DB_POOL_MAX=5
 
 # JWT & Security (Customer Portal)
 JWT_SECRET=your_jwt_secret_key
-JWT_EXPIRES_IN=1d
+JWT_EXPIRES_IN=15m
 
 # JWT & Security (Admin Portal)
 ADMIN_JWT_SECRET=your_admin_jwt_secret_key
-ADMIN_JWT_EXPIRES_IN=8h
+ADMIN_JWT_EXPIRES_IN=30m
+
+# Refresh token TTL (detik): user 30 hari, admin 8 jam
+REFRESH_TOKEN_TTL_SECONDS=2592000
+ADMIN_REFRESH_TOKEN_TTL_SECONDS=28800
+
+# Cookie refresh token
+# Produksi lintas site: COOKIE_SECURE=true, COOKIE_SAME_SITE=none
+# Localhost HTTP: COOKIE_SECURE=false, COOKIE_SAME_SITE=lax
+COOKIE_SECURE=false
+COOKIE_SAME_SITE=lax
 
 # Admin seed (npm run seed:admin)
 ADMIN_NAME=Administrator
@@ -424,11 +473,15 @@ RATE_LIMIT_WEBHOOK_WINDOW_MS=60000
 RATE_LIMIT_WEBHOOK_MAX=60
 RATE_LIMIT_UPLOAD_WINDOW_MS=3600000
 RATE_LIMIT_UPLOAD_MAX=20
+RATE_LIMIT_REFRESH_WINDOW_MS=900000
+RATE_LIMIT_REFRESH_MAX=60
+RATE_LIMIT_PASSWORD_WINDOW_MS=3600000
+RATE_LIMIT_PASSWORD_MAX=10
 ```
 
 > **Catatan:** Jangan commit file `.env` ke repository publik. Pastikan `.env` terdaftar di `.gitignore`.
 >
-> **Keamanan wajib:** `JWT_SECRET` dan `ADMIN_JWT_SECRET` harus diisi dan nilainya berbeda. Aplikasi gagal start jika salah satu kosong. Rate limit dapat disesuaikan lewat `RATE_LIMIT_*_MAX` dan `RATE_LIMIT_*_WINDOW_MS` (default login 10/15 menit, register 10/jam, webhook 60/menit, upload 20/jam). Permintaan yang melewati batas menerima `429` dengan header `Retry-After`.
+> **Keamanan wajib:** `JWT_SECRET` dan `ADMIN_JWT_SECRET` harus diisi dan nilainya berbeda. Aplikasi gagal start jika salah satu kosong. Rate limit dapat disesuaikan lewat `RATE_LIMIT_*_MAX` dan `RATE_LIMIT_*_WINDOW_MS` (default login 10/15 menit, register 10/jam, webhook 60/menit, upload 20/jam, refresh 60/15 menit, ganti password 10/jam per user). Permintaan yang melewati batas menerima `429` dengan header `Retry-After`.
 
 ### 3. Migrasi Database
 `node-pg-migrate` membaca `DATABASE_URL` dari `.env`; pastikan variabel ini menunjuk ke database yang benar sebelum menjalankan migrasi. Jalankan migrasi tabel database PostgreSQL:
@@ -449,6 +502,8 @@ npm run migrate:down
 > ```bash
 > npm run test:db
 > ```
+
+> **Urutan deploy production:** jalankan `npm run migrate:up` terlebih dahulu, baru deploy kode yang memakai refresh token. Migrasi `refresh_tokens` dan `users.token_version` harus sudah ada sebelum kode baru menerima login. Token lama tanpa klaim `tokenVersion` tetap diterima sampai `exp` habis, sehingga pengguna tidak ter-logout massal saat deploy.
 
 ### 3.1 Membuat Admin Pertama
 Setelah migrasi berhasil, buat akun administrator pertama menggunakan nilai `ADMIN_NAME`, `ADMIN_EMAIL`, dan `ADMIN_PASSWORD` dari `.env`:
@@ -490,6 +545,7 @@ Perilaku:
 - Email yang sudah terdaftar sebagai **admin** tidak akan diduplikasi; tanpa `--update` command hanya menampilkan status.
 - Email yang sudah dipakai akun **non-admin** akan ditolak.
 - Password minimal 8 karakter dan maksimal 72 byte (batas bcrypt).
+- Baik `seed:admin --update` maupun `create:admin --update` menaikkan `token_version` dan menghapus seluruh refresh token admin tersebut secara atomik, sehingga semua sesi admin lama langsung tidak berlaku.
 - `create:admin` tidak mengubah isi `.env`.
 
 ### 4. Jalankan Server
@@ -539,7 +595,7 @@ CI di `.github/workflows/test.yml` menjalankan lint, test non-DB, dan seluruh te
 ---
 
 ## 📌 Fitur Unggulan Sistem
-1. 🔐 **Autentikasi & RBAC**: Akses stateless berbasis JWT dengan pemisahan hak akses jelas antara *User* dan *Admin*.
+1. 🔐 **Autentikasi & RBAC**: Akses stateless berbasis JWT dengan pemisahan hak akses jelas antara *User* dan *Admin*, dilengkapi refresh token rotasi, deteksi replay, dan pencabutan sesi.
 2. ⚡ **Row-Level Locking & ACID Checkout**: Mencegah *race condition* dan *overselling* stok pada pembelian dengan konkurensi tinggi.
 3. 🛡️ **Penghapusan Produk Pintar (Smart Delete)**: Melindungi integritas data transaksi lampau dengan otomatis melakukan *soft delete* (`is_active = false`) jika produk pernah dibeli.
 4. 🔄 **Sinkronisasi Stok Otomatis**: Pengembalian stok otomatis jika pesanan dibatalkan/ditolak admin, dan pemotongan kembali secara aman jika status dibalikkan.

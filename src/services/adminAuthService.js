@@ -1,17 +1,24 @@
-const jwt = require("jsonwebtoken");
 const db = require("../config/db");
 const {
   normalizeEmail,
   invalidCredentialsError,
   comparePassword,
 } = require("../utils/auth");
+const {
+  createAccessToken,
+  issueRefreshToken,
+  rotateRefreshToken,
+  revokeRefreshTokenFamily,
+} = require("./authTokenService");
 
 const loginAdmin = async ({ email, password }) => {
   const normalizedEmail = normalizeEmail(email);
 
   // 1. Cari user berdasarkan email yang dinormalisasi
   const userResult = await db.query(
-    "SELECT id, name, email, password, role FROM users WHERE LOWER(email) = $1;",
+    `SELECT id, name, email, password, role, token_version
+     FROM users
+     WHERE LOWER(email) = $1;`,
     [normalizedEmail],
   );
 
@@ -34,17 +41,12 @@ const loginAdmin = async ({ email, password }) => {
     throw invalidCredentialsError();
   }
 
-  // 4. Buat JWT Admin Token
-  const tokenPayload = {
+  // 4. Buat access token dan refresh token admin
+  const token = createAccessToken({ user, portal: "admin" });
+  const refresh = await issueRefreshToken({
     userId: user.id,
-    email: user.email,
-    role: user.role,
-    type: "admin",
-  };
-
-  const adminSecret = process.env.ADMIN_JWT_SECRET;
-  const token = jwt.sign(tokenPayload, adminSecret, {
-    expiresIn: process.env.ADMIN_JWT_EXPIRES_IN || "8h",
+    portal: "admin",
+    tokenVersion: user.token_version,
   });
 
   return {
@@ -55,8 +57,26 @@ const loginAdmin = async ({ email, password }) => {
       role: user.role,
     },
     token,
+    refreshToken: refresh.token,
+    refreshExpiresAt: refresh.expiresAt,
   };
 };
+
+const refreshAdminSession = async (refreshToken) => {
+  const rotated = await rotateRefreshToken({
+    token: refreshToken,
+    portal: "admin",
+  });
+
+  return {
+    accessToken: rotated.accessToken,
+    refreshToken: rotated.token,
+    refreshExpiresAt: rotated.expiresAt,
+  };
+};
+
+const logoutAdmin = async (refreshToken) =>
+  revokeRefreshTokenFamily({ token: refreshToken, portal: "admin" });
 
 const getAdminProfile = async (adminId) => {
   const result = await db.query(
@@ -75,5 +95,7 @@ const getAdminProfile = async (adminId) => {
 
 module.exports = {
   loginAdmin,
+  refreshAdminSession,
+  logoutAdmin,
   getAdminProfile,
 };

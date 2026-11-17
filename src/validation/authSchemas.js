@@ -34,7 +34,25 @@ const loginBody = z.object({
   password: requiredString(LOGIN_REQUIRED),
 });
 
+const changePasswordBody = z.object({
+  current_password: requiredString("Password saat ini wajib diisi.").min(
+    1,
+    "Password saat ini wajib diisi.",
+  ),
+  new_password: requiredString("Password baru wajib diisi.")
+    .min(8, "Password minimal 8 karakter.")
+    .refine(
+      (value) => Buffer.byteLength(value, "utf8") <= BCRYPT_MAX_BYTES,
+      "Password maksimal 72 byte.",
+    )
+    .refine(
+      (value) => /[A-Za-z]/.test(value) && /\d/.test(value),
+      "Password harus mengandung huruf dan angka.",
+    ),
+});
+
 module.exports = {
   registerBody,
   loginBody,
+  changePasswordBody,
 };

@@ -74,6 +74,18 @@ const webhookLimiter = createRateLimiter({
   max: readPositiveInt("RATE_LIMIT_WEBHOOK_MAX", 60),
 });
 
+const refreshLimiter = createRateLimiter({
+  windowMs: readPositiveInt("RATE_LIMIT_REFRESH_WINDOW_MS", 15 * 60 * 1000),
+  max: readPositiveInt("RATE_LIMIT_REFRESH_MAX", 60),
+});
+
+const passwordLimiter = createRateLimiter({
+  windowMs: readPositiveInt("RATE_LIMIT_PASSWORD_WINDOW_MS", 60 * 60 * 1000),
+  max: readPositiveInt("RATE_LIMIT_PASSWORD_MAX", 10),
+  keyGenerator: (req) =>
+    req.user && req.user.userId ? `user:${req.user.userId}` : req.ip,
+});
+
 const uploadLimiter = createRateLimiter({
   windowMs: readPositiveInt("RATE_LIMIT_UPLOAD_WINDOW_MS", 60 * 60 * 1000),
   max: readPositiveInt("RATE_LIMIT_UPLOAD_MAX", 20),
@@ -86,6 +98,8 @@ module.exports = {
   createRateLimiter,
   loginLimiter,
   registerLimiter,
+  refreshLimiter,
+  passwordLimiter,
   webhookLimiter,
   uploadLimiter,
 };

@@ -179,6 +179,18 @@ test(
       query,
     });
 
+    const created = await client.query(
+      "SELECT id FROM users WHERE LOWER(email) = LOWER($1)",
+      [email],
+    );
+
+    await client.query(
+      `INSERT INTO refresh_tokens
+         (user_id, token_hash, family_id, portal, token_version, expires_at)
+       VALUES ($1, $2, gen_random_uuid(), 'admin', 1, NOW() + INTERVAL '1 hour')`,
+      [created.rows[0].id, "b".repeat(64)],
+    );
+
     const result = await createOrUpdateAdmin({
       email,
       name: "Admin Baru",
@@ -191,7 +203,7 @@ test(
     assert.equal(result.admin.name, "Admin Baru");
 
     const row = await client.query(
-      "SELECT password FROM users WHERE id = $1",
+      "SELECT password, token_version FROM users WHERE id = $1",
       [result.admin.id],
     );
 
@@ -199,6 +211,13 @@ test(
       await bcrypt.compare("PasswordBaru123!", row.rows[0].password),
       true,
     );
+    assert.equal(row.rows[0].token_version, 2);
+
+    const tokens = await client.query(
+      "SELECT COUNT(*)::int AS count FROM refresh_tokens WHERE user_id = $1",
+      [result.admin.id],
+    );
+    assert.equal(tokens.rows[0].count, 0);
   },
 );
 

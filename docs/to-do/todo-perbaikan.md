@@ -793,7 +793,7 @@ Hasil: 20 tes docs lulus (6 `apiDocs` + 14 `openapi`). `npm test` 111 pass + 138
 
 **Temuan:** Tidak ada type checking.
 
-**Status 17 November 2026:** ditunda atas keputusan pemilik project. TypeScript tidak termasuk syarat production readiness untuk e-commerce skala menengah; project sudah memiliki 249 tes, validasi runtime Zod, dan kontrak OpenAPI. Selain itu `vercel.json` mem-build `src/app.js` langsung, sehingga migrasi file runtime ke `.ts` menuntut build/compile step dan perubahan deployment. Prioritaskan item P2 yang berdampak operasional: refresh token/revocation, rate limit & cache yang siap multi-instance, observability, dan performa.
+**Status 17 November 2026:** ditunda atas keputusan pemilik project. TypeScript tidak termasuk syarat production readiness untuk e-commerce skala menengah; project sudah memiliki 308 tes, validasi runtime Zod, dan kontrak OpenAPI. Selain itu `vercel.json` mem-build `src/app.js` langsung, sehingga migrasi file runtime ke `.ts` menuntut build/compile step dan perubahan deployment. Prioritaskan item P2 yang berdampak operasional: rate limit & cache yang siap multi-instance, observability, dan performa.
 
 **Files:** `tsconfig.json`, `types/`, `package.json`.
 
@@ -821,11 +821,73 @@ Hasil: 20 tes docs lulus (6 `apiDocs` + 14 `openapi`). `npm test` 111 pass + 138
 
 **Files:** auth service, middleware, migration session/token version.
 
-- [ ] Tambahkan refresh token dengan rotasi.
-- [ ] Tambahkan logout yang mencabut refresh token.
-- [ ] Tambahkan mekanisme revoke semua token saat password berubah.
-- [ ] Pertimbangkan token version di tabel users.
-- [ ] Tambahkan test expiry/revocation.
+**Progres 17 November 2026:** selesai. Refresh token berupa string opaque 256-bit; database hanya menyimpan hash SHA-256 di tabel `refresh_tokens` (family, portal, token version, expiry, revocation, dan `replaced_by_id`). Login user/admin mengembalikan access token ber-`tokenVersion` dan cookie `HttpOnly` (`fastshop_user_refresh` pada `/api/auth`, `fastshop_admin_refresh` pada `/api/admin/auth`); refresh token tidak pernah muncul di body. `POST /refresh` merotasi token dalam transaksi dengan `FOR UPDATE`; pemakaian ulang token lama dianggap replay dan mencabut seluruh family. `POST /logout` mencabut family dan membersihkan cookie secara idempoten. `PUT /password` menaikkan `users.token_version`, mencabut semua refresh token, dan membuat access token lama langsung ditolak. Middleware `verifyUserToken`/`verifyAdminToken` mencocokkan role dan `token_version` ke database; token lama tanpa klaim `tokenVersion` tetap diterima sampai `exp` agar deploy tidak memaksa logout massal. Endpoint cookie dilindungi allowlist `Origin` di `src/config/origins.js`, dengan rate limit refresh 60/15 menit dan ganti password 10/jam per user. CLI `seed:admin`/`create:admin --update` menaikkan `token_version` dan menghapus refresh token admin dalam satu CTE. OpenAPI diperluas menjadi 44 operasi.
+
+**Files:**
+- `migrations/1794920000000_add-refresh-tokens-and-token-version.js` (baru)
+- `src/constants/auth.js`
+- `src/config/origins.js` (baru)
+- `src/utils/refreshCookie.js` (baru)
+- `src/middlewares/authMiddleware.js`
+- `src/middlewares/requireTrustedOrigin.js` (baru)
+- `src/middlewares/rateLimit.js`
+- `src/services/authTokenService.js` (baru)
+- `src/services/passwordService.js` (baru)
+- `src/services/authService.js`
+- `src/services/adminAuthService.js`
+- `src/controllers/authController.js`
+- `src/controllers/adminAuthController.js`
+- `src/routes/authRoutes.js`
+- `src/routes/adminAuthRoutes.js`
+- `src/validation/authSchemas.js`
+- `src/app.js`
+- `scripts/lib/admin.js`
+- `docs/openapi.yaml`
+- `tests/auth/refresh-token.test.js` (baru)
+- `tests/auth/refresh-rate-limit.test.js` (baru)
+- `tests/auth/token-version.test.js` (baru)
+- `tests/auth/password-change.test.js` (baru)
+- `tests/auth/refresh-cookie.test.js` (baru)
+- `tests/auth/origin-guard.test.js` (baru)
+- `tests/services/authTokenService.test.js` (baru)
+- `tests/helpers/api.js`
+- `tests/db/migration.test.js`
+- `tests/db/schema.test.js`
+- `tests/admin.test.js`
+- `tests/docs/openapi.test.js`
+- `package.json`, `package-lock.json`
+- `README.md`, `.env.example`
+
+**Langkah:**
+- [x] Tambahkan refresh token dengan rotasi.
+- [x] Tambahkan logout yang mencabut refresh token.
+- [x] Tambahkan mekanisme revoke semua token saat password berubah.
+- [x] Pertimbangkan token version di tabel users.
+- [x] Tambahkan test expiry/revocation.
+
+**Definition of Done:**
+- [x] Refresh token opaque dengan hash SHA-256, rotasi per pemakaian, dan deteksi replay per family.
+- [x] Logout mencabut family aktif, membersihkan cookie, dan idempoten.
+- [x] Ganti password menaikkan `token_version`, mencabut semua refresh token, dan membatalkan access token lama.
+- [x] Endpoint cookie dilindungi allowlist Origin dan rate limit.
+- [x] CLI admin `--update` mencabut sesi admin secara atomik.
+- [x] OpenAPI memuat 44 operasi dan sinkron dengan route Express.
+- [x] README dan `.env.example` memuat auth, cookie, TTL, rate limit, dan urutan deploy baru.
+
+**Verifikasi:**
+```bash
+npm test
+npm run test:db
+npm run test:coverage
+npm run lint
+npm run docs:validate
+npm audit --omit=dev
+git diff --check
+```
+
+Hasil: `npm test` 125 pass + 183 skip (308 total), 0 fail; `npm run test:db` 308/308 lulus; coverage 90,17% lines / 79,12% branches / 94,80% functions; `npm run lint` OK untuk 112 file; `npm run docs:validate` mencetak `OpenAPI valid`; `npm audit --omit=dev` 0 vulnerabilities; `git diff --check` bersih.
+
+**Catatan deploy:** migrasi `refresh_tokens` dan `users.token_version` baru diterapkan ke database test. Terapkan `npm run migrate:up` ke database lokal/production **sebelum** deploy kode baru; token lama tanpa `tokenVersion` tetap berlaku sampai `exp` sehingga tidak ada logout massal saat deploy.
 
 ### P2-07: Code cleanup dan konsistensi
 
@@ -863,5 +925,5 @@ Hasil: 20 tes docs lulus (6 `apiDocs` + 14 `openapi`). `npm test` 111 pass + 138
 - [x] Tidak ada endpoint yang membocorkan error internal.
 - [x] Stok konsisten pada checkout, cancel, dan webhook.
 - [x] Semua endpoint menggunakan validasi input.
-- [ ] Dokumentasi sesuai dengan implementasi.
+- [x] Dokumentasi sesuai dengan implementasi.
 - [ ] Aplikasi dapat berjalan di lokal dan Vercel tanpa masalah lifecycle.

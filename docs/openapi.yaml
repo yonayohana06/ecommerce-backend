@@ -8,6 +8,9 @@ info:
     - Base URL lokal: `http://localhost:3001`.
     - Endpoint user memakai header `Authorization: Bearer <user-jwt>`.
     - Endpoint admin memakai header `Authorization: Bearer <admin-jwt>`.
+    - Refresh token dikirim lewat cookie HttpOnly dan tidak pernah muncul di body.
+    - Endpoint refresh/logout berbasis cookie wajib mengirim header `Origin` yang
+      terdaftar di allowlist CORS.
     - Error selalu memakai bentuk `{ "code": <status>, "message": "<pesan>" }`.
     - ID kolom PostgreSQL `bigint` dikirim sebagai JSON string; ID `serial`/`integer`
       dikirim sebagai JSON number.
@@ -132,9 +135,11 @@ paths:
       operationId: loginUser
       summary: Login pelanggan
       description: |
-        Menghasilkan JWT user (default berlaku 1 hari). Kredensial salah,
-        akun admin, dan email tidak dikenal semuanya menghasilkan pesan generik
-        `401` agar role akun tidak dapat dienumerasi.
+        Menghasilkan access token user (default berlaku 15 menit) dan refresh
+        token 30 hari lewat cookie HttpOnly `fastshop_user_refresh`. Refresh
+        token tidak pernah dikirim di body. Kredensial salah, akun admin, dan
+        email tidak dikenal semuanya menghasilkan pesan generik `401` agar role
+        akun tidak dapat dienumerasi.
       requestBody:
         required: true
         content:
@@ -147,6 +152,14 @@ paths:
       responses:
         '200':
           description: Login berhasil.
+          headers:
+            Set-Cookie:
+              description: |
+                Refresh token pelanggan. HttpOnly; `Secure` dan `SameSite=None`
+                di produksi, `SameSite=Lax` di non-produksi.
+              schema:
+                type: string
+              example: fastshop_user_refresh=refresh-token-placeholder; Path=/api/auth; HttpOnly; SameSite=Lax
           content:
             application/json:
               schema:
@@ -165,6 +178,131 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshUserToken
+      summary: Perbarui access token pelanggan
+      description: |
+        Memutar refresh token dari cookie HttpOnly `fastshop_user_refresh`.
+        Token lama dicabut dan diganti token baru; access token baru dikirim di
+        body, sedangkan refresh token hanya lewat `Set-Cookie`. Origin wajib
+        terdaftar di allowlist CORS.
+      security:
+        - userRefreshCookie: []
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      responses:
+        '200':
+          description: Token berhasil diperbarui.
+          headers:
+            Set-Cookie:
+              description: Refresh token baru, HttpOnly.
+              schema:
+                type: string
+              example: fastshop_user_refresh=refresh-token-baru; Path=/api/auth; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshEnvelope'
+              example:
+                code: 200
+                message: Token berhasil diperbarui
+                data:
+                  token: user-token-placeholder
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutUser
+      summary: Logout pelanggan
+      description: |
+        Mencabut refresh token family dari cookie dan selalu menghapus cookie,
+        termasuk bila cookie tidak ada atau token tidak dikenal (idempoten).
+        Access token tetap berlaku sampai TTL pendeknya habis.
+      security:
+        - userRefreshCookie: []
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      responses:
+        '200':
+          description: Logout berhasil.
+          headers:
+            Set-Cookie:
+              description: Menghapus cookie refresh pelanggan.
+              schema:
+                type: string
+              example: fastshop_user_refresh=; Path=/api/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                code: 200
+                message: Logout berhasil
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/auth/password:
+    put:
+      tags: [Auth]
+      operationId: changeUserPassword
+      summary: Ubah password pelanggan
+      description: |
+        Memvalidasi password saat ini, lalu menaikkan `token_version` dan
+        mencabut seluruh refresh token user. Access token lama langsung ditolak;
+        cookie refresh dihapus sehingga user harus login ulang.
+      security:
+        - userBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+            example:
+              current_password: Password123
+              new_password: PasswordBaru456
+      responses:
+        '200':
+          description: Password berhasil diubah.
+          headers:
+            Set-Cookie:
+              description: Menghapus cookie refresh pelanggan.
+              schema:
+                type: string
+              example: fastshop_user_refresh=; Path=/api/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                code: 200
+                message: Password berhasil diubah. Silakan login ulang.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -207,8 +345,10 @@ paths:
       operationId: loginAdmin
       summary: Login administrator
       description: |
-        Menghasilkan JWT admin (default berlaku 8 jam). Hanya akun dengan role
-        `admin` yang dapat login; kegagalan memakai pesan generik `401`.
+        Menghasilkan access token admin (default berlaku 30 menit) dan refresh
+        token 8 jam lewat cookie HttpOnly `fastshop_admin_refresh`. Refresh
+        token tidak pernah dikirim di body. Hanya akun dengan role `admin` yang
+        dapat login; kegagalan memakai pesan generik `401`.
       requestBody:
         required: true
         content:
@@ -221,6 +361,14 @@ paths:
       responses:
         '200':
           description: Login admin berhasil.
+          headers:
+            Set-Cookie:
+              description: |
+                Refresh token administrator. HttpOnly; `Secure` dan
+                `SameSite=None` di produksi, `SameSite=Lax` di non-produksi.
+              schema:
+                type: string
+              example: fastshop_admin_refresh=refresh-token-placeholder; Path=/api/admin/auth; HttpOnly; SameSite=Lax
           content:
             application/json:
               schema:
@@ -239,6 +387,131 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/auth/refresh:
+    post:
+      tags: [Admin Auth]
+      operationId: refreshAdminToken
+      summary: Perbarui access token administrator
+      description: |
+        Memutar refresh token dari cookie HttpOnly `fastshop_admin_refresh`.
+        Token lama dicabut dan diganti token baru; access token baru dikirim di
+        body, sedangkan refresh token hanya lewat `Set-Cookie`. Origin wajib
+        terdaftar di allowlist CORS.
+      security:
+        - adminRefreshCookie: []
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      responses:
+        '200':
+          description: Token admin berhasil diperbarui.
+          headers:
+            Set-Cookie:
+              description: Refresh token admin baru, HttpOnly.
+              schema:
+                type: string
+              example: fastshop_admin_refresh=refresh-token-baru; Path=/api/admin/auth; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshEnvelope'
+              example:
+                code: 200
+                message: Token berhasil diperbarui
+                data:
+                  token: admin-token-placeholder
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/auth/logout:
+    post:
+      tags: [Admin Auth]
+      operationId: logoutAdmin
+      summary: Logout administrator
+      description: |
+        Mencabut refresh token family admin dari cookie dan selalu menghapus
+        cookie, termasuk bila cookie tidak ada atau token tidak dikenal
+        (idempoten). Access token tetap berlaku sampai TTL pendeknya habis.
+      security:
+        - adminRefreshCookie: []
+      parameters:
+        - $ref: '#/components/parameters/OriginHeader'
+      responses:
+        '200':
+          description: Logout admin berhasil.
+          headers:
+            Set-Cookie:
+              description: Menghapus cookie refresh administrator.
+              schema:
+                type: string
+              example: fastshop_admin_refresh=; Path=/api/admin/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                code: 200
+                message: Logout berhasil
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+  /api/admin/auth/password:
+    put:
+      tags: [Admin Auth]
+      operationId: changeAdminPassword
+      summary: Ubah password administrator
+      description: |
+        Memvalidasi password saat ini, lalu menaikkan `token_version` dan
+        mencabut seluruh refresh token admin. Access token lama langsung
+        ditolak; cookie refresh dihapus sehingga admin harus login ulang.
+      security:
+        - adminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+            example:
+              current_password: AdminPassword123
+              new_password: AdminPassword456
+      responses:
+        '200':
+          description: Password admin berhasil diubah.
+          headers:
+            Set-Cookie:
+              description: Menghapus cookie refresh administrator.
+              schema:
+                type: string
+              example: fastshop_admin_refresh=; Path=/api/admin/auth; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                code: 200
+                message: Password berhasil diubah. Silakan login ulang.
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '429':
           $ref: '#/components/responses/TooManyRequests'
         '500':
@@ -1591,6 +1864,21 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: JWT administrator yang ditandatangani dengan `ADMIN_JWT_SECRET`.
+    userRefreshCookie:
+      type: apiKey
+      in: cookie
+      name: fastshop_user_refresh
+      description: |
+        Refresh token pelanggan berupa string opaque. Disimpan sebagai hash
+        SHA-256 di database, HttpOnly, dan hanya berlaku pada path `/api/auth`.
+    adminRefreshCookie:
+      type: apiKey
+      in: cookie
+      name: fastshop_admin_refresh
+      description: |
+        Refresh token administrator berupa string opaque. Disimpan sebagai hash
+        SHA-256 di database, HttpOnly, dan hanya berlaku pada path
+        `/api/admin/auth`.
   parameters:
     Page:
       name: page
@@ -1709,6 +1997,17 @@ components:
       schema:
         type: integer
         minimum: 1
+    OriginHeader:
+      name: Origin
+      in: header
+      required: true
+      description: |
+        Origin browser yang wajib terdaftar di allowlist CORS pada
+        `src/config/origins.js`. Melindungi endpoint berbasis cookie dari CSRF.
+      schema:
+        type: string
+        format: uri
+      example: http://localhost:5173
   schemas:
     ErrorResponse:
       type: object
@@ -1836,6 +2135,39 @@ components:
         password:
           type: string
           example: Password123
+    ChangePasswordRequest:
+      type: object
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+          minLength: 1
+          description: Password yang sedang aktif.
+          example: Password123
+        new_password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: |
+            Minimal 8 karakter, maksimal 72 byte, serta mengandung huruf dan
+            angka. Harus berbeda dari password saat ini.
+          example: PasswordBaru456
+    RefreshEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessResponse'
+        - type: object
+          required: [data]
+          properties:
+            data:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: |
+                    Access token baru. Refresh token baru hanya dikirim lewat
+                    header `Set-Cookie`.
+                  example: user-token-placeholder
     AuthEnvelope:
       allOf:
         - $ref: '#/components/schemas/SuccessResponse'
@@ -1850,7 +2182,7 @@ components:
                   $ref: '#/components/schemas/UserSummary'
                 token:
                   type: string
-                  description: JWT user; default berlaku 1 hari.
+                  description: JWT user; default berlaku 15 menit.
                   example: user-token-placeholder
     AdminAuthEnvelope:
       allOf:
@@ -1866,7 +2198,7 @@ components:
                   $ref: '#/components/schemas/UserSummary'
                 token:
                   type: string
-                  description: JWT admin; default berlaku 8 jam.
+                  description: JWT admin; default berlaku 30 menit.
                   example: admin-token-placeholder
     UserEnvelope:
       allOf:

@@ -71,6 +71,7 @@ test(
           "order_items",
           "cart_items",
           "audit_logs",
+          "refresh_tokens",
           "pgmigrations",
         ]) {
           assert.ok(
@@ -82,7 +83,18 @@ test(
         const migrations = await client.query(
           "SELECT name FROM pgmigrations ORDER BY id",
         );
-        assert.equal(migrations.rowCount, 8);
+        assert.equal(migrations.rowCount, 9);
+
+        const tokenVersionColumn = await client.query(
+          `SELECT is_nullable, column_default
+           FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'users'
+             AND column_name = 'token_version'`,
+        );
+        assert.equal(tokenVersionColumn.rowCount, 1);
+        assert.equal(tokenVersionColumn.rows[0].is_nullable, "NO");
+        assert.match(tokenVersionColumn.rows[0].column_default, /1/);
 
         const emailIndex = await client.query(
           `SELECT indexdef

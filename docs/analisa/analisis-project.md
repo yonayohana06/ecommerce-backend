@@ -279,11 +279,11 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
 
 ### P2 — Berikutnya
 
-- ~~Audit log admin, refresh token/revocation.~~ (audit log admin selesai 16 November 2026; refresh token/revocation belum)
+- ~~Audit log admin, refresh token/revocation.~~ (audit log admin selesai 16 November 2026; refresh token/revocation selesai 17 November 2026)
 - ~~Batch signed URL/caching.~~ (selesai)
-- ~~OpenAPI/Swagger.~~ (selesai 16 November 2026: `docs/openapi.yaml` 38 operasi, Swagger UI hanya non-production, spec divalidasi di CI dan disinkronkan dengan route Express lewat tes)
+- ~~OpenAPI/Swagger.~~ (selesai 16 November 2026: `docs/openapi.yaml` 44 operasi, Swagger UI hanya non-production, spec divalidasi di CI dan disinkronkan dengan route Express lewat tes)
 - Structured logging, metrics, tracing.
-- Migrasi bertahap ke TypeScript jika project akan terus berkembang. *(ditunda 17 November 2026: bukan syarat production readiness; runtime JS + Zod + 249 tes + OpenAPI sudah memadai. Fokus ke item operasional seperti refresh token/revocation, rate limit/cache multi-instance, observability, dan performa.)*
+- Migrasi bertahap ke TypeScript jika project akan terus berkembang. *(ditunda 17 November 2026: bukan syarat production readiness; runtime JS + Zod + 308 tes + OpenAPI sudah memadai. Fokus ke item operasional seperti rate limit/cache multi-instance, observability, dan performa.)*
 
 ## 7. Kesimpulan
 

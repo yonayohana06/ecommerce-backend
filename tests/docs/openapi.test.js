@@ -42,8 +42,14 @@ const REQUIRED_OPERATIONS = [
   ["get", "/ready"],
   ["post", "/api/auth/register"],
   ["post", "/api/auth/login"],
+  ["post", "/api/auth/refresh"],
+  ["post", "/api/auth/logout"],
+  ["put", "/api/auth/password"],
   ["get", "/api/auth/me"],
   ["post", "/api/admin/auth/login"],
+  ["post", "/api/admin/auth/refresh"],
+  ["post", "/api/admin/auth/logout"],
+  ["put", "/api/admin/auth/password"],
   ["get", "/api/admin/auth/me"],
   ["get", "/api/products"],
   ["get", "/api/products/{id}"],
@@ -182,6 +188,8 @@ test("spec OpenAPI valid", () => {
   assert.ok(api.servers.length > 0);
   assert.ok(api.components.securitySchemes.userBearer);
   assert.ok(api.components.securitySchemes.adminBearer);
+  assert.ok(api.components.securitySchemes.userRefreshCookie);
+  assert.ok(api.components.securitySchemes.adminRefreshCookie);
 });
 
 test("seluruh operasi terdokumentasi", () => {
@@ -211,8 +219,8 @@ test("operasi spec sama persis dengan route Express", () => {
   );
 });
 
-test("spec memuat 38 operasi", () => {
-  assert.equal(collectSpecOperations().size, 38);
+test("spec memuat 44 operasi", () => {
+  assert.equal(collectSpecOperations().size, 44);
 });
 
 test("guard mengenali route langsung pada app", () => {
@@ -284,12 +292,26 @@ test("operasi ber-security mendokumentasikan 401 dan 403", () => {
 });
 
 test("operasi admin memakai adminBearer", () => {
+  const refreshCookieRoutes = new Set([
+    "/api/admin/auth/refresh",
+    "/api/admin/auth/logout",
+  ]);
+
   for (const [routePath, pathItem] of Object.entries(api.paths)) {
     if (!routePath.startsWith("/api/admin")) continue;
     if (routePath === "/api/admin/auth/login") continue;
 
     for (const method of HTTP_METHODS) {
       if (!pathItem[method]) continue;
+
+      if (refreshCookieRoutes.has(routePath)) {
+        assert.deepEqual(
+          pathItem[method].security,
+          [{ adminRefreshCookie: [] }],
+          `${method} ${routePath} tidak memakai adminRefreshCookie`,
+        );
+        continue;
+      }
 
       assert.deepEqual(
         pathItem[method].security,
@@ -306,6 +328,7 @@ test("operasi user memakai userBearer", () => {
   for (const [routePath, pathItem] of Object.entries(api.paths)) {
     const isUserOperation =
       routePath === "/api/auth/me" ||
+      routePath === "/api/auth/password" ||
       routePath.startsWith("/api/cart") ||
       (routePath.startsWith("/api/orders") &&
         routePath !== "/api/orders/webhook/payment");
@@ -321,6 +344,59 @@ test("operasi user memakai userBearer", () => {
         `${method} ${routePath} tidak memakai userBearer`,
       );
     }
+  }
+
+  assert.deepEqual(api.paths["/api/auth/refresh"].post.security, [
+    { userRefreshCookie: [] },
+  ]);
+  assert.deepEqual(api.paths["/api/auth/logout"].post.security, [
+    { userRefreshCookie: [] },
+  ]);
+});
+
+test("operasi cookie mendokumentasikan Origin, 401, 403, dan Set-Cookie", () => {
+  const cookieOperations = [
+    ["post", "/api/auth/refresh"],
+    ["post", "/api/auth/logout"],
+    ["post", "/api/admin/auth/refresh"],
+    ["post", "/api/admin/auth/logout"],
+  ];
+
+  for (const [method, routePath] of cookieOperations) {
+    const operation = api.paths[routePath][method];
+
+    assert.ok(operation.responses["401"], `${method} ${routePath} tanpa 401`);
+    assert.ok(operation.responses["403"], `${method} ${routePath} tanpa 403`);
+    assert.ok(operation.responses["429"], `${method} ${routePath} tanpa 429`);
+    assert.ok(
+      operation.responses["200"].headers?.["Set-Cookie"],
+      `${method} ${routePath} tanpa header Set-Cookie`,
+    );
+
+    const origin = (operation.parameters || []).find(
+      (parameter) =>
+        parameter.in === "header" && parameter.name === "Origin",
+    );
+    assert.ok(origin, `${method} ${routePath} tanpa parameter Origin`);
+    assert.equal(origin.required, true);
+  }
+
+  const setCookieOperations = [
+    ["post", "/api/auth/login"],
+    ["post", "/api/auth/refresh"],
+    ["post", "/api/auth/logout"],
+    ["put", "/api/auth/password"],
+    ["post", "/api/admin/auth/login"],
+    ["post", "/api/admin/auth/refresh"],
+    ["post", "/api/admin/auth/logout"],
+    ["put", "/api/admin/auth/password"],
+  ];
+
+  for (const [method, routePath] of setCookieOperations) {
+    assert.ok(
+      api.paths[routePath][method].responses["200"].headers?.["Set-Cookie"],
+      `${method} ${routePath} tanpa header Set-Cookie`,
+    );
   }
 });
 

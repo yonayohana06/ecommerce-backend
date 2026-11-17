@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const { validateEnv } = require("./config/env");
+const { ALLOWED_ORIGINS } = require("./config/origins");
 
 validateEnv(process.env, { requireDatabase: false });
 
@@ -30,13 +31,7 @@ app.use(express.json());
 // Konfigurasi CORS
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "http://localhost:3000",
-      "https://fastshop-id.vercel.app",
-      "https://admin-fastshop.netlify.app",
-    ],
+    origin: ALLOWED_ORIGINS,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     exposedHeaders: ["X-Request-Id"],

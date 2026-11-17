@@ -31,13 +31,32 @@ async function startTestServer() {
 async function request(
   baseUrl,
   path,
-  { method = "GET", token, body, rawBody, formData, headers = {} } = {},
+  {
+    method = "GET",
+    token,
+    cookie,
+    origin,
+    body,
+    rawBody,
+    formData,
+    headers = {},
+  } = {},
 ) {
   const requestHeaders = { ...headers };
   const init = { method, headers: requestHeaders };
 
   if (token) {
     requestHeaders.Authorization = `Bearer ${token}`;
+  }
+
+  if (cookie !== undefined) {
+    requestHeaders.Cookie = Array.isArray(cookie)
+      ? cookie.join("; ")
+      : cookie;
+  }
+
+  if (origin !== undefined) {
+    requestHeaders.Origin = origin;
   }
 
   if (formData) {
@@ -64,7 +83,23 @@ async function request(
     }
   }
 
-  return { status: response.status, body: parsed, headers: response.headers };
+  return {
+    status: response.status,
+    body: parsed,
+    headers: response.headers,
+    setCookie: response.headers.getSetCookie().slice(),
+  };
+}
+
+function getCookieValue(response, name) {
+  const prefix = `${name}=`;
+  const cookie = response.setCookie.find((item) => item.startsWith(prefix));
+
+  if (!cookie) {
+    return null;
+  }
+
+  return cookie.slice(prefix.length).split(";")[0];
 }
 
 async function registerUser(
@@ -235,6 +270,7 @@ module.exports = {
   createAdmin,
   loginAdmin,
   signToken,
+  getCookieValue,
   createCategory,
   createProduct,
   createOrderWithItems,

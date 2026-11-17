@@ -143,13 +143,20 @@ async function createOrUpdateAdmin({
 
     const hashedPassword = await bcrypt.hash(password, 10);
     const updatedResult = await query(
-      `UPDATE users
-       SET name = $1,
-           password = $2,
-           phone_number = $3,
-           updated_at = NOW()
-       WHERE id = $4
-       RETURNING id, name, email, role, updated_at;`,
+      `WITH updated AS (
+         UPDATE users
+         SET name = $1,
+             password = $2,
+             phone_number = $3,
+             updated_at = NOW(),
+             token_version = token_version + 1
+         WHERE id = $4
+         RETURNING id, name, email, role, updated_at
+       ), revoked AS (
+         DELETE FROM refresh_tokens
+         WHERE user_id = (SELECT id FROM updated)
+       )
+       SELECT * FROM updated;`,
       [input.name, hashedPassword, input.phoneNumber ?? null, existing.id],
     );
 

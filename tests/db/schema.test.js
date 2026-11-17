@@ -246,3 +246,143 @@ test(
     );
   },
 );
+
+test(
+  "users.token_version NOT NULL dengan default 1",
+  { skip: !runDbTests },
+  async () => {
+    const column = await getColumn("users", "token_version");
+
+    assert.ok(column, "kolom users.token_version belum ada");
+    assert.equal(column.is_nullable, "NO");
+    assert.match(column.column_default, /1/);
+  },
+);
+
+test(
+  "refresh_tokens.portal hanya menerima user/admin",
+  { skip: !runDbTests },
+  async () => {
+    await expectStatementError(
+      `WITH new_user AS (
+         INSERT INTO users (name, email, password, role)
+         VALUES ('Portal Invalid', $2, 'hash', 'user')
+         RETURNING id
+       )
+       INSERT INTO refresh_tokens
+         (user_id, token_hash, family_id, portal, token_version, expires_at)
+       SELECT id, $1, '00000000-0000-0000-0000-000000000001'::uuid,
+              'superadmin', 1, NOW() + INTERVAL '1 hour'
+       FROM new_user`,
+      ["a".repeat(64), uniqueEmail("portal-invalid")],
+      "23514",
+    );
+  },
+);
+
+test(
+  "refresh_tokens.token_hash unik",
+  { skip: !runDbTests },
+  async () => {
+    const client = await db.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const user = await client.query(
+        `INSERT INTO users (name, email, password, role)
+         VALUES ('Token Unik', $1, 'hash', 'user')
+         RETURNING id`,
+        [uniqueEmail("token-unique")],
+      );
+      const tokenHash = "c".repeat(64);
+
+      await client.query(
+        `INSERT INTO refresh_tokens
+           (user_id, token_hash, family_id, portal, token_version, expires_at)
+         VALUES ($1, $2, '00000000-0000-0000-0000-000000000002'::uuid,
+                 'user', 1, NOW() + INTERVAL '1 hour')`,
+        [user.rows[0].id, tokenHash],
+      );
+
+      await assert.rejects(
+        () =>
+          client.query(
+            `INSERT INTO refresh_tokens
+               (user_id, token_hash, family_id, portal, token_version, expires_at)
+             VALUES ($1, $2, '00000000-0000-0000-0000-000000000003'::uuid,
+                     'user', 1, NOW() + INTERVAL '1 hour')`,
+            [user.rows[0].id, tokenHash],
+          ),
+        (error) => error.code === "23505",
+      );
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+  },
+);
+
+test(
+  "refresh_tokens.user_id cascade saat user dihapus",
+  { skip: !runDbTests },
+  async () => {
+    const client = await db.pool.connect();
+
+    try {
+      await client.query("BEGIN");
+
+      const user = await client.query(
+        `INSERT INTO users (name, email, password, role)
+         VALUES ('Token Cascade', $1, 'hash', 'user')
+         RETURNING id`,
+        [uniqueEmail("token-cascade")],
+      );
+
+      await client.query(
+        `INSERT INTO refresh_tokens
+           (user_id, token_hash, family_id, portal, token_version, expires_at)
+         VALUES ($1, $2, '00000000-0000-0000-0000-000000000004'::uuid,
+                 'user', 1, NOW() + INTERVAL '1 hour')`,
+        [user.rows[0].id, "d".repeat(64)],
+      );
+
+      await client.query("DELETE FROM users WHERE id = $1", [
+        user.rows[0].id,
+      ]);
+
+      const remaining = await client.query(
+        "SELECT COUNT(*)::int AS count FROM refresh_tokens WHERE user_id = $1",
+        [user.rows[0].id],
+      );
+
+      assert.equal(remaining.rows[0].count, 0);
+    } finally {
+      await client.query("ROLLBACK");
+      client.release();
+    }
+  },
+);
+
+test(
+  "refresh_tokens memiliki index lookup, family, dan expiry",
+  { skip: !runDbTests },
+  async () => {
+    const active = await getIndex(
+      "refresh_tokens",
+      "idx_refresh_tokens_user_active",
+    );
+    const family = await getIndex("refresh_tokens", "idx_refresh_tokens_family");
+    const expiry = await getIndex(
+      "refresh_tokens",
+      "idx_refresh_tokens_expires_at",
+    );
+
+    assert.ok(active, "index idx_refresh_tokens_user_active belum ada");
+    assert.ok(family, "index idx_refresh_tokens_family belum ada");
+    assert.ok(expiry, "index idx_refresh_tokens_expires_at belum ada");
+    assert.match(active.indexdef, /\(user_id, revoked_at\)/);
+    assert.match(family.indexdef, /\(family_id\)/);
+    assert.match(expiry.indexdef, /\(expires_at\)/);
+  },
+);

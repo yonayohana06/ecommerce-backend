@@ -1,11 +1,16 @@
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const db = require("../config/db");
 const {
   normalizeEmail,
   invalidCredentialsError,
   comparePassword,
 } = require("../utils/auth");
+const {
+  createAccessToken,
+  issueRefreshToken,
+  rotateRefreshToken,
+  revokeRefreshTokenFamily,
+} = require("./authTokenService");
 
 const registerUser = async ({ name, email, password }) => {
   const normalizedEmail = normalizeEmail(email);
@@ -44,7 +49,9 @@ const loginUser = async ({ email, password }) => {
 
   // 1. Cari user berdasarkan email yang dinormalisasi
   const userResult = await db.query(
-    "SELECT id, name, email, password, role FROM users WHERE LOWER(email) = $1;",
+    `SELECT id, name, email, password, role, token_version
+     FROM users
+     WHERE LOWER(email) = $1;`,
     [normalizedEmail],
   );
 
@@ -68,16 +75,12 @@ const loginUser = async ({ email, password }) => {
     throw invalidCredentialsError();
   }
 
-  // 4. Buat JWT Token Pengguna Biasa
-  const tokenPayload = {
+  // 4. Buat access token dan refresh token
+  const token = createAccessToken({ user, portal: "user" });
+  const refresh = await issueRefreshToken({
     userId: user.id,
-    email: user.email,
-    role: user.role,
-    type: "user",
-  };
-
-  const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || "1d",
+    portal: "user",
+    tokenVersion: user.token_version,
   });
 
   return {
@@ -88,8 +91,26 @@ const loginUser = async ({ email, password }) => {
       role: user.role,
     },
     token,
+    refreshToken: refresh.token,
+    refreshExpiresAt: refresh.expiresAt,
   };
 };
+
+const refreshUserSession = async (refreshToken) => {
+  const rotated = await rotateRefreshToken({
+    token: refreshToken,
+    portal: "user",
+  });
+
+  return {
+    accessToken: rotated.accessToken,
+    refreshToken: rotated.token,
+    refreshExpiresAt: rotated.expiresAt,
+  };
+};
+
+const logoutUser = async (refreshToken) =>
+  revokeRefreshTokenFamily({ token: refreshToken, portal: "user" });
 
 const getUserProfile = async (userId) => {
   const result = await db.query(
@@ -109,5 +130,7 @@ const getUserProfile = async (userId) => {
 module.exports = {
   registerUser,
   loginUser,
+  refreshUserSession,
+  logoutUser,
   getUserProfile,
 };
