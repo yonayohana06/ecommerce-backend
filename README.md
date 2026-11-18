@@ -48,11 +48,13 @@ ECOMMERCE-BACKEND/
 │   │   ├── authController.js         # Registrasi dan login user biasa
 │   │   ├── cartController.js         # Manajemen keranjang belanja pengguna
 │   │   ├── categoryController.js     # Katalog kategori publik
+│   │   ├── categoryReadHandlers.js   # Factory handler baca kategori publik/admin
 │   │   ├── orderController.js        # Checkout pesanan & webhook pembayaran
 │   │   ├── paymentController.js      # Upload bukti bayar & manajemen order admin
-│   │   └── productController.js      # Katalog & detail produk publik
+│   │   ├── productController.js      # Katalog & detail produk publik
+│   │   └── productReadHandlers.js    # Factory handler baca produk publik/admin
 │   ├── middlewares/
-│   │   ├── authMiddleware.js         # Token verification (verifyUserToken, verifyAdminToken, verifyAuthToken, RBAC)
+│   │   ├── authMiddleware.js         # Verifikasi token user/admin + cek token version
 │   │   ├── errorHandler.js           # Error JSON konsisten + log stack di server
 │   │   ├── requestLogger.js          # X-Request-Id + log request terstruktur
 │   │   ├── requireTrustedOrigin.js   # Guard Origin untuk endpoint berbasis cookie
@@ -83,6 +85,7 @@ ECOMMERCE-BACKEND/
 │   │   └── productService.js         # Filter produk, ILIKE search, pagination, soft/hard delete
 │   ├── utils/
 │   │   ├── logger.js                 # Logger JSON terstruktur (info/warn/error/silent)
+│   │   ├── pagination.js             # Sanitasi dan metadata pagination bersama
 │   │   ├── refreshCookie.js          # Set/clear/read cookie refresh HttpOnly
 │   │   └── serializers.js            # Konversi numeric PostgreSQL ke number response
 │   ├── app.js                        # Express app murni (tanpa listener)

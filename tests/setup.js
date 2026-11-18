@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 
 // Test suite tidak perlu menulis setiap request ke stdout; test logger
 // memakai stream injeksi sendiri.
@@ -11,7 +11,6 @@ process.env.ADMIN_JWT_SECRET ||= "test-admin-jwt-secret";
 process.env.PAYMENT_SERVER_KEY ||= "test-payment-server-key";
 process.env.SUPABASE_URL ||= "https://example.supabase.co";
 process.env.SUPABASE_SERVICE_ROLE_KEY ||= "test-service-role-key";
-process.env.SUPABASE_PUBLISHABLE_KEY ||= "test-publishable-key";
 
 const runDbTests = process.env.RUN_DB_TESTS === "1";
 

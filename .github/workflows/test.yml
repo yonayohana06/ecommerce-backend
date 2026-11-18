@@ -33,7 +33,6 @@ jobs:
       PAYMENT_SERVER_KEY: ci-payment-server-key
       SUPABASE_URL: https://example.supabase.co
       SUPABASE_SERVICE_ROLE_KEY: ci-service-role-key
-      SUPABASE_PUBLISHABLE_KEY: ci-publishable-key
 
     steps:
       - name: Checkout Code

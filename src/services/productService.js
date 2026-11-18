@@ -1,17 +1,22 @@
 const db = require("../config/db");
 const { serializeProduct } = require("../utils/serializers");
+const { parsePagination, buildPagination } = require("../utils/pagination");
 
-const getProducts = async ({ categoryId, search, page = 1, limit = 10 }) => {
-  const conditions = ["p.is_active = TRUE"];
+const listProducts = async ({
+  categoryId,
+  search,
+  page = 1,
+  limit = 10,
+  activeOnly,
+}) => {
+  const conditions = activeOnly ? ["p.is_active = TRUE"] : [];
   const values = [];
 
-  // Sanitasi Input Page: Pastikan minimal 1 dan berupa angka positif
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-
-  // Sanitasi Input Limit: Minimal 1, Default 10, dan MAKSIMAL 100
-  const rawLimit = parseInt(limit, 10) || 10;
-  const limitNum = Math.min(100, Math.max(1, rawLimit));
-  const offset = (pageNum - 1) * limitNum;
+  const {
+    page: pageNum,
+    limit: limitNum,
+    offset,
+  } = parsePagination({ page, limit });
 
   // Filter Kategori (jika dikirim)
   if (categoryId) {
@@ -46,13 +51,15 @@ const getProducts = async ({ categoryId, search, page = 1, limit = 10 }) => {
   queryValues.push(parseInt(offset));
   const offsetPlaceholder = `$${queryValues.length}`;
 
+  const activeColumn = activeOnly ? "" : "      p.is_active,\n";
+
   const query = `
     SELECT 
       p.id,
       p.name,
       p.price,
       p.stock,
-      p.image_url,
+${activeColumn}      p.image_url,
       c.name AS category_name
     FROM products p
     LEFT JOIN categories c ON p.category_id = c.id
@@ -63,25 +70,20 @@ const getProducts = async ({ categoryId, search, page = 1, limit = 10 }) => {
 
   const result = await db.query(query, queryValues);
 
-  // Kalkulasi Metadata Pagination
-  const totalPages = Math.ceil(totalItems / limitNum) || 1;
-  const hasPreviousPage = pageNum > 1;
-  const hasNextPage = pageNum < totalPages;
-
   return {
     products: result.rows.map(serializeProduct),
-    pagination: {
-      currentPage: pageNum,
+    pagination: buildPagination({
+      page: pageNum,
       limit: limitNum,
       totalItems,
-      totalPages,
-      hasPreviousPage,
-      hasNextPage,
-    },
+    }),
   };
 };
 
-const getProductById = async (id) => {
+const getProductByIdWithOptions = async (id, { activeOnly }) => {
+  const activeFilter = activeOnly ? " AND p.is_active = TRUE" : "";
+  const activeColumn = activeOnly ? "" : "          p.is_active,\n";
+
   const query = `
         SELECT 
           p.id,
@@ -89,12 +91,12 @@ const getProductById = async (id) => {
           p.description,
           p.price,
           p.stock,
-          p.image_url,
+${activeColumn}          p.image_url,
           p.category_id,
           c.name AS category_name
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.id
-        WHERE p.id = $1 AND p.is_active = TRUE;
+        WHERE p.id = $1${activeFilter};
     `;
 
   const result = await db.query(query, [id]);
@@ -102,115 +104,28 @@ const getProductById = async (id) => {
   // Kembalikan objek produk jika ditemukan, atau null jika tidak ada
   return serializeProduct(result.rows[0] || null);
 };
+
+const getProducts = async ({
+  categoryId,
+  search,
+  page = 1,
+  limit = 10,
+} = {}) =>
+  listProducts({ categoryId, search, page, limit, activeOnly: true });
 
 const getProductsAdmin = async ({
   categoryId,
   search,
   page = 1,
   limit = 10,
-}) => {
-  const conditions = [];
-  const values = [];
+} = {}) =>
+  listProducts({ categoryId, search, page, limit, activeOnly: false });
 
-  // Sanitasi Input Page: Pastikan minimal 1 dan berupa angka positif
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+const getProductById = async (id) =>
+  getProductByIdWithOptions(id, { activeOnly: true });
 
-  // Sanitasi Input Limit: Minimal 1, Default 10, dan MAKSIMAL 100
-  const rawLimit = parseInt(limit, 10) || 10;
-  const limitNum = Math.min(100, Math.max(1, rawLimit));
-  const offset = (pageNum - 1) * limitNum;
-
-  // Filter Kategori (jika dikirim)
-  if (categoryId) {
-    values.push(parseInt(categoryId));
-    conditions.push(`p.category_id = $${values.length}`);
-  }
-
-  // Search Keyword (ILIKE = case-insensitive search)
-  if (search) {
-    values.push(`%${search}%`);
-    conditions.push(`p.name ILIKE $${values.length}`);
-  }
-
-  // Gabungkan semua kondisi dengan AND
-  const whereClause =
-    conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-  // Hitung Total Items
-  const countQuery = `
-    SELECT COUNT(p.id) as total 
-    FROM products p 
-    ${whereClause};
-  `;
-  const countResult = await db.query(countQuery, values);
-  const totalItems = parseInt(countResult.rows[0].total);
-
-  // Salin values untuk query kedua agar tidak merusak urutan placeholder limit/offset
-  const queryValues = [...values];
-
-  queryValues.push(parseInt(limitNum));
-  const limitPlaceholder = `$${queryValues.length}`;
-  queryValues.push(parseInt(offset));
-  const offsetPlaceholder = `$${queryValues.length}`;
-
-  const query = `
-    SELECT 
-      p.id,
-      p.name,
-      p.price,
-      p.stock,
-      p.is_active,
-      p.image_url,
-      c.name AS category_name
-    FROM products p
-    LEFT JOIN categories c ON p.category_id = c.id
-    ${whereClause}
-    ORDER BY p.id DESC
-    LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder};
-  `;
-
-  const result = await db.query(query, queryValues);
-
-  // Kalkulasi Metadata Pagination
-  const totalPages = Math.ceil(totalItems / limitNum) || 1;
-  const hasPreviousPage = pageNum > 1;
-  const hasNextPage = pageNum < totalPages;
-
-  return {
-    products: result.rows.map(serializeProduct),
-    pagination: {
-      currentPage: pageNum,
-      limit: limitNum,
-      totalItems,
-      totalPages,
-      hasPreviousPage,
-      hasNextPage,
-    },
-  };
-};
-
-const getProductByIdAdmin = async (id) => {
-  const query = `
-        SELECT 
-          p.id,
-          p.name,
-          p.description,
-          p.price,
-          p.stock,
-          p.is_active,
-          p.image_url,
-          p.category_id,
-          c.name AS category_name
-        FROM products p
-        LEFT JOIN categories c ON p.category_id = c.id
-        WHERE p.id = $1;
-    `;
-
-  const result = await db.query(query, [id]);
-
-  // Kembalikan objek produk jika ditemukan, atau null jika tidak ada
-  return serializeProduct(result.rows[0] || null);
-};
+const getProductByIdAdmin = async (id) =>
+  getProductByIdWithOptions(id, { activeOnly: false });
 
 const createProduct = async (data) => {
   const { category_id, name, description, price, stock, image_url, is_active } =

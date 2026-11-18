@@ -895,14 +895,25 @@ Hasil: `npm test` 125 pass + 183 skip (308 total), 0 fail; `npm run test:db` 308
 
 **Files:** berbagai file `src`, `.gitignore`.
 
-- [ ] Hapus `verifyAuthToken`/`authorize` jika tidak dipakai, atau gunakan dengan benar.
-- [ ] Hapus import `require("../routes/authRoutes")` yang tidak terpakai di `productService.js`.
-- [ ] Satukan helper pagination yang berulang.
-- [ ] Kurangi duplikasi controller/service produk & kategori publik vs admin.
-- [ ] Set `dotenv.config({ quiet: true })` atau gunakan central config.
-- [ ] Hapus atau dokumentasikan `SUPABASE_PUBLISHABLE_KEY` yang tidak dipakai.
-- [ ] Tambahkan `.DS_Store`, log, dan coverage ke `.gitignore`.
-- [ ] Jalankan lint/format sebelum commit.
+- [x] Hapus `verifyAuthToken`/`authorize` jika tidak dipakai, atau gunakan dengan benar.
+- [x] Hapus import `require("../routes/authRoutes")` yang tidak terpakai di `productService.js`.
+- [x] Satukan helper pagination yang berulang.
+- [x] Kurangi duplikasi controller/service produk & kategori publik vs admin.
+- [x] Set `dotenv.config({ quiet: true })` atau gunakan central config.
+- [x] Hapus atau dokumentasikan `SUPABASE_PUBLISHABLE_KEY` yang tidak dipakai.
+- [x] Tambahkan `.DS_Store`, log, dan coverage ke `.gitignore`.
+- [x] Jalankan lint/format sebelum commit.
+
+**Progres 18 November 2026:** selesai.
+
+- `verifyAuthToken` dan `authorize` dihapus dari `src/middlewares/authMiddleware.js`; ekspor kini hanya `verifyUserToken` dan `verifyAdminToken`. Test `tests/middlewares/authMiddleware.exports.test.js` mengunci daftar ekspor tersebut.
+- Import `authRoutes` di `productService.js` sudah tidak ada sebelum P2-07, sehingga tidak ada perubahan tambahan untuk item tersebut.
+- `src/utils/pagination.js` menyediakan `parsePagination`/`buildPagination` (limit maksimal 100, `totalPages` minimal 1). Helper dipakai di `productService`, `orderService`, `paymentService`, dan `auditLogService`.
+- `src/services/productService.js` memakai core `listProducts` dan `getProductByIdWithOptions` dengan opsi `activeOnly`, sehingga query publik/admin tidak lagi terduplikasi. Test karakterisasi di `tests/api/catalog.test.js` memastikan produk nonaktif hanya terlihat di endpoint admin.
+- `src/controllers/productReadHandlers.js` dan `src/controllers/categoryReadHandlers.js` menjadi factory handler baca publik/admin. Route, status code, pesan respons, dan bentuk JSON tidak berubah.
+- `scripts/prepare-test-db.js` dan `tests/setup.js` memakai `dotenv.config({ quiet: true })`; banner promosi dotenv tidak lagi muncul. `SUPABASE_PUBLISHABLE_KEY` dihapus dari `tests/setup.js` dan `.github/workflows/test.yml` karena tidak dipakai runtime.
+- `.gitignore` memuat `.DS_Store`, `*.log`, `/coverage/`, dan `/.superpowers/`; `.env` tetap terabaikan.
+- Verifikasi aktual: `npm test` 141 pass + 184 skip (325 total), 0 fail; `npm run test:db` 325/325 lulus; coverage 93,40% lines / 81,55% branches / 97,40% functions; `npm run lint` OK untuk 120 file; `npm run docs:validate` mencetak `OpenAPI valid`; `npm audit --omit=dev` 0 vulnerabilities; `git diff --check` bersih.
 
 ---
 

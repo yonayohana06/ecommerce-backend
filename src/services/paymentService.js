@@ -4,6 +4,7 @@ const supabase = require("../config/supabase");
 const ORDER_STATUS = require("../constants/orderStatus");
 const orderStatusService = require("./orderStatusService");
 const { signedUrlCache } = require("../utils/signedUrlCache");
+const { parsePagination, buildPagination } = require("../utils/pagination");
 const auditLogService = require("./auditLogService");
 
 const SIGNED_URL_EXPIRES_IN = 3600; // 60 menit
@@ -194,13 +195,11 @@ const getAllOrdersForAdmin = async ({
   page = 1,
   limit = 10,
 }) => {
-  // Sanitasi Input Page: Pastikan minimal 1 dan berupa angka positif
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-
-  // Sanitasi Input Limit: Minimal 1, Default 10, dan MAKSIMAL 100
-  const rawLimit = parseInt(limit, 10) || 10;
-  const limitNum = Math.min(100, Math.max(1, rawLimit));
-  const offset = (pageNum - 1) * limitNum;
+  const {
+    page: pageNum,
+    limit: limitNum,
+    offset,
+  } = parsePagination({ page, limit });
 
   let queryValues = [];
   let whereClauses = [];
@@ -263,20 +262,14 @@ const getAllOrdersForAdmin = async ({
   });
 
   const totalItems = parseInt(countResult.rows[0].count, 10);
-  const totalPages = Math.ceil(totalItems / limitNum) || 1;
-  const hasPreviousPage = pageNum > 1;
-  const hasNextPage = pageNum < totalPages;
 
   return {
     orders,
-    pagination: {
-      currentPage: pageNum,
+    pagination: buildPagination({
+      page: pageNum,
       limit: limitNum,
       totalItems,
-      totalPages,
-      hasPreviousPage,
-      hasNextPage,
-    },
+    }),
   };
 };
 

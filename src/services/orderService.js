@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
 const { serializeOrder } = require("../utils/serializers");
+const { parsePagination, buildPagination } = require("../utils/pagination");
 const ORDER_STATUS = require("../constants/orderStatus");
 const orderStatusService = require("./orderStatusService");
 const { generateSignedUrls } = require("./paymentService");
@@ -114,11 +115,11 @@ const checkout = async (userId, shippingAddress) => {
 
 // Ambil daftar pesanan milik user yang sedang login (dengan filter status & pagination)
 const getUserOrders = async ({ userId, status, page = 1, limit = 10 }) => {
-  // Sanitasi input pagination
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const rawLimit = parseInt(limit, 10) || 10;
-  const limitNum = Math.min(100, Math.max(1, rawLimit));
-  const offset = (pageNum - 1) * limitNum;
+  const {
+    page: pageNum,
+    limit: limitNum,
+    offset,
+  } = parsePagination({ page, limit });
 
   const queryValues = [userId];
   const whereClauses = ["o.user_id = $1"];
@@ -208,20 +209,14 @@ const getUserOrders = async ({ userId, status, page = 1, limit = 10 }) => {
   const totalItems = countResult.rows[0]?.count
     ? parseInt(countResult.rows[0].count, 10)
     : 0;
-  const totalPages = Math.ceil(totalItems / limitNum) || 1;
-  const hasPreviousPage = pageNum > 1;
-  const hasNextPage = pageNum < totalPages;
 
   return {
     orders,
-    pagination: {
-      currentPage: pageNum,
+    pagination: buildPagination({
+      page: pageNum,
       limit: limitNum,
       totalItems,
-      totalPages,
-      hasPreviousPage,
-      hasNextPage,
-    },
+    }),
   };
 };
 

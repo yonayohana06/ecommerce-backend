@@ -1,5 +1,6 @@
 const { pool } = require("../config/db");
 const { logger } = require("../utils/logger");
+const { parsePagination, buildPagination } = require("../utils/pagination");
 
 const toJsonParam = (value) =>
   value === undefined || value === null ? null : JSON.stringify(value);
@@ -63,10 +64,11 @@ const listAuditLogs = async ({
   action,
   actorId,
 } = {}) => {
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
-  const rawLimit = parseInt(limit, 10) || 10;
-  const limitNum = Math.min(100, Math.max(1, rawLimit));
-  const offset = (pageNum - 1) * limitNum;
+  const {
+    page: pageNum,
+    limit: limitNum,
+    offset,
+  } = parsePagination({ page, limit });
 
   const whereClauses = [];
   const queryValues = [];
@@ -110,18 +112,14 @@ const listAuditLogs = async ({
   ]);
 
   const totalItems = parseInt(countResult.rows[0].total, 10);
-  const totalPages = Math.ceil(totalItems / limitNum) || 1;
 
   return {
     logs: logsResult.rows,
-    pagination: {
-      currentPage: pageNum,
+    pagination: buildPagination({
+      page: pageNum,
       limit: limitNum,
       totalItems,
-      totalPages,
-      hasPreviousPage: pageNum > 1,
-      hasNextPage: pageNum < totalPages,
-    },
+    }),
   };
 };
 

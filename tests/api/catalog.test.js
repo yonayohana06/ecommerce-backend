@@ -266,3 +266,65 @@ dbTest("hapus kategori memindahkan produk terkait menjadi tanpa kategori", async
   assert.equal(detail.status, 200);
   assert.equal(detail.body.data.category_id, null);
 });
+
+dbTest("produk nonaktif hanya terlihat di endpoint admin", async () => {
+  const suffix = uniqueSuffix();
+  const created = await request(baseUrl, "/api/admin/products", {
+    method: "POST",
+    token: adminToken,
+    body: {
+      name: `Produk Nonaktif ${suffix}`,
+      price: 4000,
+      stock: 2,
+    },
+  });
+  assert.equal(created.status, 201);
+
+  const productId = created.body.data.id;
+  productIds.push(productId);
+
+  await db.query("UPDATE products SET is_active = FALSE WHERE id = $1", [
+    productId,
+  ]);
+
+  const publicList = await request(
+    baseUrl,
+    `/api/products?search=${encodeURIComponent(created.body.data.name)}`,
+  );
+  assert.equal(publicList.status, 200);
+  assert.equal(
+    publicList.body.data.some((item) => item.id === productId),
+    false,
+  );
+
+  const publicDetail = await request(baseUrl, `/api/products/${productId}`);
+  assert.equal(publicDetail.status, 404);
+
+  const adminList = await request(
+    baseUrl,
+    `/api/admin/products?search=${encodeURIComponent(created.body.data.name)}`,
+    { token: adminToken },
+  );
+  assert.equal(adminList.status, 200);
+  const adminItem = adminList.body.data.find((item) => item.id === productId);
+  assert.ok(adminItem);
+  assert.equal(adminItem.is_active, false);
+
+  const adminDetail = await request(
+    baseUrl,
+    `/api/admin/products/${productId}`,
+    { token: adminToken },
+  );
+  assert.equal(adminDetail.status, 200);
+  assert.equal(adminDetail.body.data.is_active, false);
+
+  const publicActiveDetail = await request(
+    baseUrl,
+    `/api/products/${product.id}`,
+  );
+  assert.equal(publicActiveDetail.status, 200);
+  assert.equal(
+    Object.hasOwn(publicActiveDetail.body.data, "is_active"),
+    false,
+  );
+});

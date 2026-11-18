@@ -230,14 +230,14 @@ Tolak transisi di luar aturan tersebut dan catat audit log perubahan status.
   - README menulis `NUMERIC(12)`, DB lama memakai `NUMERIC(12,2)`; DB baru mengikuti migration `NUMERIC(12)` dan scale 0 dipertahankan. → README menegaskan scale 0.
 - **Seed admin:** sudah ditambahkan script `npm run seed:admin` pada 8 November 2026; admin pertama (`admin@fastshop.id`) sudah dibuat.
 - **Tidak ada `.env.example`:** menyulitkan setup. **Update 8 November 2026:** `.env.example` lengkap ditambahkan dan divalidasi test.
-- **Dead code:** `verifyAuthToken` dan `authorize` tidak dipakai; import tidak terpakai di `productService.js` sudah dihapus.
-- **Duplikasi:** controller/service produk & kategori publik vs admin hampir sama; pagination logic berulang.
+- **Dead code:** `verifyAuthToken` dan `authorize` tidak dipakai; import tidak terpakai di `productService.js` sudah dihapus. **Update 18 November 2026:** selesai; `verifyAuthToken` dan `authorize` dihapus dari `src/middlewares/authMiddleware.js`, ekspor kini hanya `verifyUserToken` dan `verifyAdminToken`, dan test ekspor ditambahkan.
+- **Duplikasi:** controller/service produk & kategori publik vs admin hampir sama; pagination logic berulang. **Update 18 November 2026:** selesai; `src/utils/pagination.js` menyatukan sanitasi dan metadata pagination untuk product/order/payment/audit log, `productService` memakai core `listProducts`/`getProductByIdWithOptions` dengan opsi `activeOnly`, dan handler baca produk/kategori memakai factory `productReadHandlers.js`/`categoryReadHandlers.js`. Kontrak API tidak berubah.
 - **Health check `/200`** hanya mengecek Supabase, bukan PostgreSQL utama; sebaiknya ada `/health` dan `/ready`. **Update 8 November 2026:** selesai; `/200` sekarang alias `/health` tanpa RPC Supabase, dan `/ready` menjalankan `SELECT 1` ke PostgreSQL utama.
 - **Observabilitas dasar:** **Update 8 November 2026:** selesai.
   - `src/utils/logger.js` (logger JSON terstruktur), `src/middlewares/requestLogger.js` (X-Request-Id + log per respons), dan `src/middlewares/errorHandler.js` (log stack error di server) ditambahkan.
   - `src/server.js` mencatat database connected, server started, shutdown, dan gagal shutdown.
   - Level log diatur lewat `LOG_LEVEL`.
-- **`dotenv` versi 17 mencetak pesan promosi di log**; pertimbangkan `dotenv.config({ quiet: true })` atau central config.
+- **`dotenv` versi 17 mencetak pesan promosi di log**; pertimbangkan `dotenv.config({ quiet: true })` atau central config. **Update 18 November 2026:** selesai; `scripts/prepare-test-db.js` dan `tests/setup.js` memakai `dotenv.config({ quiet: true })`.
 
 ## 5. Skema Aktual vs Migration
 
