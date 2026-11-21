@@ -1969,7 +1969,10 @@ components:
       name: search
       in: query
       required: false
-      description: Pencarian berdasarkan ID pesanan atau email user.
+      description: >-
+        Bila seluruh input berupa angka, pencarian dilakukan sebagai exact match
+        ID pesanan. Bila bukan angka, pencarian dilakukan sebagai substring email
+        user secara case-insensitive. Nama user tidak ikut dicari.
       schema:
         type: string
         maxLength: 150

@@ -310,7 +310,7 @@ Base URL: `http://localhost:3001/api`
 | Method | Endpoint | Akses | Deskripsi |
 | :---: | :--- | :---: | :--- |
 | `GET` | `/api/admin/orders/summary` | Admin | Mengambil ringkasan statistik pesanan (total pesanan, total omset dari status valid, dan perincian order per status). |
-| `GET` | `/api/admin/orders` | Admin | Mengambil daftar pesanan dengan filter status, pencarian (order ID / email user), pagination, dan signed URL bukti transfer. |
+| `GET` | `/api/admin/orders` | Admin | Mengambil daftar pesanan dengan filter status, pencarian (angka = ID pesanan exact, teks = email user), pagination, dan signed URL bukti transfer. |
 | `GET` | `/api/admin/orders/:orderId` | Admin | Mengambil detail lengkap pesanan spesifik, data customer, item produk, dan signed URL bukti transfer. |
 | `PATCH` | `/api/admin/orders/:orderId/status` | Admin | Mengubah status pesanan sesuai transisi yang valid. Mengembalikan stok otomatis jika dibatalkan, atau memotong stok kembali jika pesanan batal diaktifkan kembali. |
 

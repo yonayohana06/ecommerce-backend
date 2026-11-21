@@ -809,11 +809,29 @@ Hasil: 20 tes docs lulus (6 `apiDocs` + 14 `openapi`). `npm test` 111 pass + 138
 
 **Files:** `src/services/paymentService.js`, migration index.
 
-- [ ] Gunakan exact match untuk pencarian ID numerik.
-- [ ] Tambahkan index `orders(status, created_at)`.
-- [ ] Evaluasi count query pada produk/order; pertimbangkan cache atau estimasi.
-- [ ] Ukur dengan `EXPLAIN ANALYZE` pada data menyerupai production.
-- [ ] Tetapkan target latency endpoint list.
+- [x] Gunakan exact match untuk pencarian ID numerik.
+- [x] Tambahkan index `orders(status, created_at)`.
+- [x] Evaluasi count query pada produk/order; pertimbangkan cache atau estimasi.
+- [x] Ukur dengan `EXPLAIN ANALYZE` pada data menyerupai production.
+- [x] Tetapkan target latency endpoint list.
+
+**Progres 20 November 2026:** selesai.
+
+- `getAllOrdersForAdmin` memakai exact match `o.id = $n::bigint` bila seluruh input `search` berupa angka. Leading zero tetap diperlakukan sebagai ID, dan angka di luar jangkauan `bigint` menghasilkan 200 dengan data kosong. Input non-angka memakai substring `u.email ILIKE '%term%'` (case-insensitive); nama user tidak dicari.
+- Index `orders(status, created_at)` ternyata sudah ada sejak migration `1794119284866_add-integrity-constraints.js` dengan nama `idx_orders_status_created`; `EXPLAIN ANALYZE` filter status memakai index tersebut. Tidak ada index baru pada P2-05.
+- Benchmark opt-in `scripts/benchmark-admin-search.js` mengukur 10.000 user/order/produk dengan 3 warm-up dan 30 iterasi per skenario. Seluruh 12 skenario PASS terhadap target p95 < 200 ms; pada eksekusi verifikasi akhir p95 terburuk 40,86 ms (products search limit 100), orders search ID 1,91–2,35 ms, orders tanpa filter 10,40–24,35 ms, dan products search 23,76–40,86 ms.
+- `EXPLAIN ANALYZE` menunjukkan `orders_pkey` untuk exact ID dan `idx_orders_status_created` untuk filter status. Pencarian email dan count produk memakai sequential scan karena wildcard di depan, sedangkan query data produk memakai `Index Scan Backward using products_pkey` dengan filter nama. Latency tetap jauh di bawah target.
+- Count query dipertahankan karena seluruh skenario memenuhi target; tidak ada cache atau estimasi baru.
+- Verifikasi aktual: `npm test` 151 pass + 197 skip (348 total) 0 fail; `npm run test:db` 348/348 lulus; coverage 93,54% lines / 81,98% branches / 97,47% functions; `npm run lint` OK untuk 124 file; `npm run docs:validate` mencetak `OpenAPI valid`; `npm audit --omit=dev` 0 vulnerabilities; `git diff --check` bersih.
+
+**File P2-05:**
+- `src/services/paymentService.js`
+- `tests/api/admin-order-search.test.js` (baru)
+- `scripts/lib/benchmark.js` (baru)
+- `scripts/benchmark-admin-search.js` (baru)
+- `tests/scripts/benchmark.test.js` (baru)
+- `docs/openapi.yaml`
+- `README.md`
 
 ### P2-06: Refresh token dan revocation
 

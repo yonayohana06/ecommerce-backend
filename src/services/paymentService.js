@@ -210,11 +210,19 @@ const getAllOrdersForAdmin = async ({
   }
 
   if (search && search.trim() !== "") {
-    const searchParam = `%${search.trim()}%`;
-    whereClauses.push(
-      `(CAST(o.id AS TEXT) ILIKE $${queryValues.length + 1} OR u.email ILIKE $${queryValues.length + 1})`,
-    );
-    queryValues.push(searchParam);
+    const term = search.trim();
+
+    if (/^\d+$/.test(term)) {
+      if (BigInt(term) <= 9223372036854775807n) {
+        queryValues.push(term);
+        whereClauses.push(`o.id = $${queryValues.length}::bigint`);
+      } else {
+        whereClauses.push("FALSE");
+      }
+    } else {
+      queryValues.push(`%${term}%`);
+      whereClauses.push(`u.email ILIKE $${queryValues.length}`);
+    }
   }
 
   const whereString =
